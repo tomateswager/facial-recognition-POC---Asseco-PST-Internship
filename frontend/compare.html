@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comparacao AWS vs DeepFace</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="/js/nav.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        .mode-tabs { display:flex; gap:8px; margin-bottom:1rem; }
+        .mode-btn {
+            flex:1; padding:.65rem 1rem; border:2px solid var(--border);
+            border-radius:8px; background:var(--card-bg); color:var(--text);
+            cursor:pointer; font-size:.95rem; font-weight:500; transition:all .2s;
+        }
+        .mode-btn.active { background:var(--primary); color:#fff; border-color:var(--primary); }
+
+        .upload-row { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+        .upload-row.single-mode { grid-template-columns:1fr; }
+        .upload-box {
+            border:2px dashed var(--border); border-radius:10px;
+            padding:1.5rem; text-align:center; cursor:pointer;
+            transition:border-color .2s; position:relative;
+        }
+        .upload-box:hover { border-color:var(--primary); }
+        .upload-box img { max-height:200px; max-width:100%; border-radius:8px; margin-top:.75rem; display:none; }
+        .upload-box .upload-icon { font-size:2rem; }
+        .upload-box .upload-text { color:var(--text-muted); font-size:.9rem; margin-top:.5rem; }
+
+        .results-row { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-top:1.5rem; }
+        .engine-card {
+            border-radius:12px; padding:1.5rem;
+            border:1px solid var(--border); background:var(--card-bg);
+        }
+        .engine-card .engine-name { font-size:1.1rem; font-weight:700; margin-bottom:1rem; }
+        .engine-card .sim-value { font-size:2.5rem; font-weight:800; line-height:1; }
+        .engine-card .sim-label { color:var(--text-muted); font-size:.85rem; margin-bottom:.75rem; }
+        .engine-card .verdict {
+            display:inline-flex; align-items:center; gap:.5rem;
+            padding:.35rem .9rem; border-radius:20px; font-weight:600; font-size:.9rem;
+            margin-bottom:.75rem;
+        }
+        .verdict.match  { background:rgba(16,185,129,.15); color:#10b981; border:1px solid rgba(16,185,129,.3); }
+        .verdict.nomatch{ background:rgba(239,68,68,.15);  color:#ef4444; border:1px solid rgba(239,68,68,.3); }
+        .latency-badge  {
+            display:inline-block; padding:.25rem .65rem;
+            background:rgba(255,255,255,.07); border:1px solid var(--border);
+            border-radius:6px; font-size:.8rem; color:var(--text-muted);
+        }
+        .sim-bar-bg { background:rgba(255,255,255,.08); border-radius:4px; height:8px; margin:.75rem 0; }
+        .sim-bar-fill { height:8px; border-radius:4px; transition:width .6s ease; }
+        .winner-banner {
+            text-align:center; padding:1rem; border-radius:10px; margin-top:1.5rem;
+            background:rgba(99,102,241,.1); border:1px solid rgba(99,102,241,.3);
+            font-size:1rem;
+        }
+        .chart-wrap { max-width:480px; margin:1.5rem auto 0; }
+        .loading-spin { display:inline-block; width:18px; height:18px; border:2px solid rgba(255,255,255,.3); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; vertical-align:middle; margin-right:.5rem; }
+        @keyframes spin { to { transform:rotate(360deg); } }
+
+        .threshold-row { display:flex; gap:.4rem; flex-wrap:wrap; margin-top:.6rem; }
+        .th-pill {
+            padding:.2rem .5rem; border-radius:12px; font-size:.75rem; font-weight:600;
+            background:rgba(255,255,255,.07); border:1px solid var(--border); color:var(--text-muted);
+        }
+        .th-pill.ok  { background:rgba(16,185,129,.15); color:#10b981; border-color:rgba(16,185,129,.3); }
+        .th-pill.nok { background:rgba(239,68,68,.12);  color:#ef4444; border-color:rgba(239,68,68,.25); }
+
+        .identity-badge {
+            display:inline-block; margin-top:.75rem; padding:.3rem .7rem;
+            border-radius:16px; background:rgba(255,255,255,.07); border:1px solid var(--border);
+            font-size:.85rem;
+        }
+
+        .attr-panel { margin-top:.75rem; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+        .attr-toggle {
+            width:100%; background:rgba(255,255,255,.06); border:none; padding:.5rem .9rem;
+            text-align:left; cursor:pointer; color:var(--text); font-size:.82rem; font-weight:600;
+            display:flex; justify-content:space-between; align-items:center;
+        }
+        .attr-toggle:hover { background:rgba(255,255,255,.12); }
+        .attr-body { padding:.65rem .9rem; border-top:1px solid var(--border); }
+        .emo-bar-bg { flex:1; background:rgba(255,255,255,.1); border-radius:4px; height:6px; }
+        .emo-bar-fill { height:6px; border-radius:4px; transition:width .5s; }
+
+        @media(max-width:640px){
+            .upload-row, .results-row { grid-template-columns:1fr; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div style="display:flex;align-items:center;gap:0.75rem;">
+            <a href="/compare" class="navbar-brand">Comparador</a>
+            <div style="display:flex;background:rgba(255,255,255,0.12);border-radius:8px;padding:3px;gap:3px;">
+                <a href="/" style="padding:0.25rem 0.65rem;border-radius:6px;color:rgba(255,255,255,0.85);font-size:0.8rem;font-weight:500;text-decoration:none;">DeepFace POC</a>
+                <a href="/aws" style="padding:0.25rem 0.65rem;border-radius:6px;color:rgba(255,255,255,0.85);font-size:0.8rem;font-weight:500;text-decoration:none;">AWS POC</a>
+            </div>
+        </div>
+        <ul class="navbar-nav">
+            <li><a href="/deepface/config">Configuracao</a></li>
+        </ul>
+    </nav>
+
+    <div class="container">
+        <div class="page-title">Comparacao AWS vs DeepFace</div>
+        <div class="page-subtitle">Corre a mesma verificacao 1:1 ou identificacao 1:N nos dois motores e compara resultados</div>
+
+        <div class="card">
+            <div style="font-size:.85rem;color:var(--text-muted);margin-bottom:.5rem;">Modo de comparacao</div>
+            <div class="mode-tabs">
+                <button class="mode-btn active" id="btn-11" onclick="setMode('1:1')">Verificacao 1:1</button>
+                <button class="mode-btn" id="btn-1n" onclick="setMode('1:N')">Identificacao 1:N</button>
+            </div>
+
+            <div class="card-title">Imagens para Comparar</div>
+            <div class="upload-row" id="upload-row">
+                <div class="upload-box" id="box1" onclick="document.getElementById('input1').click()">
+                    <div class="upload-icon">🖼️</div>
+                    <div class="upload-text"><strong id="label1">Imagem de Referencia</strong><br>Clique ou arraste</div>
+                    <img id="prev1" alt="preview 1">
+                </div>
+                <div class="upload-box" id="box2" onclick="document.getElementById('input2').click()">
+                    <div class="upload-icon">🖼️</div>
+                    <div class="upload-text"><strong id="label2">Imagem a Verificar</strong><br>Clique ou arraste</div>
+                    <img id="prev2" alt="preview 2">
+                </div>
+            </div>
+            <input type="file" id="input1" accept="image/*" style="display:none" onchange="setImage(1,this.files[0])">
+            <input type="file" id="input2" accept="image/*" style="display:none" onchange="setImage(2,this.files[0])">
+
+            <div style="margin-top:1rem;display:flex;gap:1rem;align-items:center;flex-wrap:wrap;">
+                <button class="btn btn-primary" id="compare-btn" onclick="runComparison()" disabled style="min-width:180px;">Comparar</button>
+                <button class="btn btn-secondary" onclick="resetAll()">Limpar</button>
+            </div>
+        </div>
+
+        <div id="results-section" style="display:none">
+            <div class="results-row">
+                <div class="engine-card">
+                    <div class="engine-name">AWS Rekognition</div>
+                    <div id="aws-content"><span style="color:var(--text-muted);">A aguardar...</span></div>
+                </div>
+                <div class="engine-card">
+                    <div class="engine-name">DeepFace</div>
+                    <div id="df-content"><span style="color:var(--text-muted);">A aguardar...</span></div>
+                </div>
+            </div>
+
+            <div class="card" style="margin-top:1.5rem;">
+                <div class="card-title">Comparacao de Similaridade</div>
+                <div class="chart-wrap">
+                    <canvas id="compare-chart"></canvas>
+                </div>
+                <div id="winner-banner" class="winner-banner" style="display:none;"></div>
+            </div>
+        </div>
+    </div>
+
+<script>
+let file1 = null;
+let file2 = null;
+let chartInstance = null;
+let currentMode = '1:1';
+
+function isReady() {
+    return currentMode === '1:N' ? !!file1 : !!(file1 && file2);
+}
+
+function getQueryFile() {
+    return currentMode === '1:N' ? file1 : file2;
+}
+
+function setMode(mode) {
+    currentMode = mode;
+    document.getElementById('btn-11').classList.toggle('active', mode === '1:1');
+    document.getElementById('btn-1n').classList.toggle('active', mode === '1:N');
+    document.getElementById('upload-row').classList.toggle('single-mode', mode === '1:N');
+    document.getElementById('box2').style.display = mode === '1:N' ? 'none' : 'block';
+    document.getElementById('label1').textContent = mode === '1:N' ? 'Imagem a Identificar' : 'Imagem de Referencia';
+    document.getElementById('label2').textContent = 'Imagem a Verificar';
+    document.getElementById('compare-btn').disabled = !isReady();
+}
+
+function setImage(n, file) {
+    if (!file) return;
+    if (n === 1) file1 = file; else file2 = file;
+    const prev = document.getElementById('prev' + n);
+    const box = document.getElementById('box' + n);
+    prev.src = URL.createObjectURL(file);
+    prev.style.display = 'block';
+    box.querySelector('.upload-icon').style.display = 'none';
+    box.querySelector('.upload-text').style.display = 'none';
+    box.style.borderColor = 'var(--primary)';
+    document.getElementById('compare-btn').disabled = !isReady();
+}
+
+['box1', 'box2'].forEach((id, i) => {
+    const el = document.getElementById(id);
+    el.addEventListener('dragover', e => { e.preventDefault(); el.style.borderColor = 'var(--primary)'; });
+    el.addEventListener('dragleave', () => {
+        const hasFile = i === 0 ? file1 : file2;
+        el.style.borderColor = hasFile ? 'var(--primary)' : 'var(--border)';
+    });
+    el.addEventListener('drop', e => {
+        e.preventDefault();
+        const f = e.dataTransfer.files[0];
+        if (f) setImage(i + 1, f);
+    });
+});
+
+async function runComparison() {
+    if (!isReady()) return;
+
+    const btn = document.getElementById('compare-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="loading-spin"></span> A comparar...';
+
+    document.getElementById('results-section').style.display = 'block';
+    document.getElementById('aws-content').innerHTML = '<span style="color:var(--text-muted);">A processar...</span>';
+    document.getElementById('df-content').innerHTML = '<span style="color:var(--text-muted);">A processar...</span>';
+    document.getElementById('winner-banner').style.display = 'none';
+
+    const [awsResult, dfResult, awsAttrs, dfAttrs] = await Promise.all([
+        callAWS(),
+        callDeepFace(),
+        callAWSAttributes(),
+        callDFAttributes(),
+    ]);
+
+    renderAWS(awsResult, awsAttrs);
+    renderDeepFace(dfResult, dfAttrs);
+    renderChart(awsResult, dfResult);
+    renderWinner(awsResult, dfResult);
+
+    btn.disabled = false;
+    btn.textContent = 'Comparar';
+}
+
+async function callAWSAttributes() {
+    try {
+        const queryFile = getQueryFile();
+        if (!queryFile) return null;
+        const fd = new FormData();
+        fd.append('image', queryFile, 'img.jpg');
+        const res = await fetch('/api/aws/attributes', { method: 'POST', body: fd });
+        return res.ok ? await res.json() : null;
+    } catch {
+        return null;
+    }
+}
+
+async function callDFAttributes() {
+    try {
+        const queryFile = getQueryFile();
+        if (!queryFile) return null;
+        const fd = new FormData();
+        fd.append('image', queryFile, 'img.jpg');
+        const res = await fetch('/api/attributes/', { method: 'POST', body: fd });
+        return res.ok ? await res.json() : null;
+    } catch {
+        return null;
+    }
+}
+
+async function callAWS() {
+    try {
+        const t0 = performance.now();
+        let res;
+        if (currentMode === '1:N') {
+            const fd = new FormData();
+            fd.append('file', file1, 'query.jpg');
+            fd.append('max_faces', '5');
+            res = await fetch('/api/aws/identify', { method: 'POST', body: fd });
+        } else {
+            const fd = new FormData();
+            fd.append('file1', file1, 'ref.jpg');
+            fd.append('file2', file2, 'target.jpg');
+            res = await fetch('/api/aws/verify', { method: 'POST', body: fd });
+        }
+        const data = await res.json();
+        if (!res.ok) return { error: data.detail || 'Erro AWS' };
+        data._frontend_ms = Math.round(performance.now() - t0);
+        return data;
+    } catch (e) {
+        return { error: e.message };
+    }
+}
+
+async function callDeepFace() {
+    try {
+        const t0 = performance.now();
+        let res;
+        if (currentMode === '1:N') {
+            const fd = new FormData();
+            fd.append('image', file1, 'query.jpg');
+            fd.append('mode', 'file');
+            res = await fetch('/api/identify/', { method: 'POST', body: fd });
+        } else {
+            const fd = new FormData();
+            fd.append('image1', file1, 'ref.jpg');
+            fd.append('image2', file2, 'target.jpg');
+            fd.append('mode', 'file');
+            res = await fetch('/api/verify/', { method: 'POST', body: fd });
+        }
+        const data = await res.json();
+        if (!res.ok) return { error: data.detail || 'Erro DeepFace' };
+        data._frontend_ms = Math.round(performance.now() - t0);
+        return data;
+    } catch (e) {
+        return { error: e.message };
+    }
+}
+
+function getAwsSummary(data) {
+    if (currentMode === '1:N') {
+        const best = (data.matches || [])[0] || null;
+        return {
+            sim: best ? (best.similarity || 0) : 0,
+            matched: !!best,
+            latency: data.latency_ms || data._frontend_ms || 0,
+            threshold: data.threshold || 95,
+            identity: best ? (best.external_id || 'Sem nome') : null,
+        };
+    }
+    return {
+        sim: data.similarity || 0,
+        matched: !!data.is_match,
+        latency: data.latency_ms || data._frontend_ms || 0,
+        threshold: data.threshold || 95,
+        identity: null,
+    };
+}
+
+function getDfSummary(data) {
+    if (currentMode === '1:N') {
+        const best = (data.results || [])[0] || null;
+        return {
+            sim: best ? Math.max(0, (1 - (best.distance || 1)) * 100) : 0,
+            matched: !!best,
+            latency: data.latency_ms || data._frontend_ms || 0,
+            threshold: data.threshold != null ? Math.round((1 - data.threshold) * 100) : null,
+            identity: best ? (best.name || 'Sem nome') : null,
+        };
+    }
+    const threshRaw = data.threshold || 0;
+    return {
+        sim: data.distance != null ? Math.max(0, (1 - data.distance) * 100) : (data.similarity || 0),
+        matched: !!(data.verified || data.is_match),
+        latency: data.latency_ms || data._frontend_ms || 0,
+        threshold: data.distance != null ? Math.round((1 - threshRaw) * 100) : threshRaw,
+        identity: null,
+    };
+}
+
+function renderAWS(data, attrs) {
+    const el = document.getElementById('aws-content');
+    if (data.error) {
+        el.innerHTML = `<span style="color:#ef4444;">${data.error}</span>`;
+        return;
+    }
+    const summary = getAwsSummary(data);
+    const extra = summary.identity
+        ? `<div class="identity-badge">Pessoa: <strong>${summary.identity}</strong></div>`
+        : (currentMode === '1:N' ? `<div class="identity-badge">Nenhuma pessoa identificada</div>` : '');
+    el.innerHTML = buildEngineContent(summary, '#4fc3f7', extra) + renderAttrPanel(attrs, 'aws', '#4fc3f7');
+}
+
+function renderDeepFace(data, attrs) {
+    const el = document.getElementById('df-content');
+    if (data.error) {
+        el.innerHTML = `<span style="color:#ef4444;">${data.error}</span>`;
+        return;
+    }
+    const summary = getDfSummary(data);
+    const extra = summary.identity
+        ? `<div class="identity-badge">Pessoa: <strong>${summary.identity}</strong></div>`
+        : (currentMode === '1:N' ? `<div class="identity-badge">Nenhuma pessoa identificada</div>` : '');
+    el.innerHTML = buildEngineContent(summary, '#a78bfa', extra) + renderAttrPanel(attrs, 'df', '#a78bfa');
+}
+
+function buildEngineContent(summary, color, extraHtml = '') {
+    const pct = Math.max(0, Math.min(100, summary.sim || 0));
+    const verdictClass = summary.matched ? 'match' : 'nomatch';
+    const verdictText = summary.matched ? 'MATCH' : 'SEM MATCH';
+    const thresholdPills = [50, 60, 70, 80, 85, 90, 95, 99].map(t => {
+        const ok = pct >= t;
+        const active = summary.threshold != null && t === Math.round(summary.threshold)
+            ? ` style="outline:2px solid ${color};outline-offset:1px;"`
+            : '';
+        return `<span class="th-pill ${ok ? 'ok' : 'nok'}"${active}>${t}%</span>`;
+    }).join('');
+
+    return `
+        <div class="sim-value" style="color:${color};">${pct.toFixed(1)}%</div>
+        <div class="sim-label">similaridade</div>
+        <div class="sim-bar-bg"><div class="sim-bar-fill" style="width:${pct}%;background:${color};"></div></div>
+        <div class="verdict ${verdictClass}">${verdictText}</div>
+        <span class="latency-badge">${summary.latency}ms</span>
+        ${summary.threshold != null ? `<div style="margin-top:.75rem;font-size:.8rem;color:var(--text-muted);">Threshold actual: <strong>${Math.round(summary.threshold)}%</strong></div><div class="threshold-row">${thresholdPills}</div>` : ''}
+        ${extraHtml}
+    `;
+}
+
+function renderChart(awsData, dfData) {
+    if (chartInstance) {
+        chartInstance.destroy();
+        chartInstance = null;
+    }
+
+    const awsSummary = awsData.error ? null : getAwsSummary(awsData);
+    const dfSummary = dfData.error ? null : getDfSummary(dfData);
+
+    const ctx = document.getElementById('compare-chart').getContext('2d');
+    chartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ['AWS Rekognition', 'DeepFace'],
+            datasets: [{
+                label: 'Similaridade (%)',
+                data: [
+                    awsSummary ? Math.max(0, Math.min(100, awsSummary.sim)) : null,
+                    dfSummary ? Math.max(0, Math.min(100, dfSummary.sim)) : null,
+                ],
+                backgroundColor: ['rgba(79,195,247,0.7)', 'rgba(167,139,250,0.7)'],
+                borderColor: ['#4fc3f7', '#a78bfa'],
+                borderWidth: 2,
+                borderRadius: 8,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => ctx.raw != null ? ` ${ctx.raw.toFixed(1)}%` : ' N/A'
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    min: 0,
+                    max: 100,
+                    ticks: { callback: v => v + '%', color: '#94a3b8' },
+                    grid: { color: 'rgba(255,255,255,0.06)' },
+                },
+                x: {
+                    ticks: { color: '#94a3b8' },
+                    grid: { display: false }
+                }
+            }
+        }
+    });
+}
+
+function renderWinner(awsData, dfData) {
+    const banner = document.getElementById('winner-banner');
+    if (awsData.error || dfData.error) {
+        banner.style.display = 'none';
+        return;
+    }
+
+    const awsSummary = getAwsSummary(awsData);
+    const dfSummary = getDfSummary(dfData);
+    let msg = '';
+
+    if (currentMode === '1:N') {
+        if (awsSummary.matched && dfSummary.matched) {
+            msg += `<strong>Ambos identificaram:</strong> AWS = ${awsSummary.identity || '—'} · DeepFace = ${dfSummary.identity || '—'}`;
+        } else if (awsSummary.matched || dfSummary.matched) {
+            msg += `<strong>Divergencia:</strong> AWS = ${awsSummary.matched ? (awsSummary.identity || 'identificado') : 'sem match'}, DeepFace = ${dfSummary.matched ? (dfSummary.identity || 'identificado') : 'sem match'}`;
+        } else {
+            msg += `<strong>Ambos concordam:</strong> SEM MATCH`;
+        }
+    } else if (awsSummary.matched === dfSummary.matched) {
+        msg += `<strong>Ambos concordam:</strong> ${awsSummary.matched ? 'MATCH' : 'SEM MATCH'}`;
+    } else {
+        msg += `<strong>Divergencia:</strong> AWS diz ${awsSummary.matched ? 'MATCH' : 'SEM MATCH'}, DeepFace diz ${dfSummary.matched ? 'MATCH' : 'SEM MATCH'}`;
+    }
+
+    const fasterName = awsSummary.latency <= dfSummary.latency ? 'AWS Rekognition' : 'DeepFace';
+    const fasterDiff = Math.abs(awsSummary.latency - dfSummary.latency);
+    msg += ` &nbsp;·&nbsp; <strong>${fasterName}</strong> foi ${fasterDiff}ms mais rapido`;
+
+    const higherSim = awsSummary.sim >= dfSummary.sim ? 'AWS' : 'DeepFace';
+    const diff = Math.abs(awsSummary.sim - dfSummary.sim).toFixed(1);
+    msg += ` &nbsp;·&nbsp; <strong>${higherSim}</strong> deu similaridade mais alta (delta ${diff}%)`;
+
+    banner.innerHTML = msg;
+    banner.style.display = 'block';
+}
+
+const EMOTION_PT = { happy:'Feliz', sad:'Triste', angry:'Raiva', fear:'Medo', surprise:'Surpreso', surprised:'Surpreso', disgust:'Nojo', disgusted:'Nojo', neutral:'Neutro', calm:'Calmo', confused:'Confuso' };
+const RACE_PT = { 'asian':'Asiatico', 'indian':'Indiano', 'black':'Negro', 'white':'Caucasiano', 'middle eastern':'Medio Oriente', 'latino hispanic':'Latino' };
+
+function renderAttrPanel(attrs, uid, color) {
+    if (!attrs || !attrs.success) return '';
+    const emoji = attrs.emotion_emoji || ':|';
+    const emName = EMOTION_PT[attrs.dominant_emotion] || attrs.dominant_emotion || 'Neutro';
+    const ageStr = attrs.age_range
+        ? `${attrs.age_range.low || 0}-${attrs.age_range.high || 0} anos`
+        : (attrs.age != null ? `~${attrs.age} anos` : '');
+    const gender = attrs.gender === 'Man' || attrs.gender === 'Male' ? 'Masc.'
+        : attrs.gender === 'Woman' || attrs.gender === 'Female' ? 'Fem.'
+        : (attrs.gender || '');
+    const genderConf = attrs.gender_confidence ? ` (${attrs.gender_confidence}%)` : '';
+    const emBars = (attrs.emotions || []).map(e => {
+        const n = EMOTION_PT[e.name] || e.name || '';
+        const c = Math.round(e.confidence || 0);
+        return `<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;">
+            <span style="width:65px;font-size:.73rem;color:#94a3b8;">${n}</span>
+            <div class="emo-bar-bg"><div class="emo-bar-fill" style="width:${c}%;background:${color};"></div></div>
+            <span style="width:30px;text-align:right;font-size:.73rem;">${c}%</span></div>`;
+    }).join('');
+    const raceName = RACE_PT[attrs.dominant_race] || attrs.dominant_race || '';
+    const raceBars = (attrs.race || []).map(e => {
+        const n = RACE_PT[e.name] || e.name || '';
+        const c = Math.round(e.confidence || 0);
+        return `<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;">
+            <span style="width:95px;font-size:.73rem;color:#94a3b8;">${n}</span>
+            <div class="emo-bar-bg"><div class="emo-bar-fill" style="width:${c}%;background:#f59e0b;"></div></div>
+            <span style="width:30px;text-align:right;font-size:.73rem;">${c}%</span></div>`;
+    }).join('');
+    const extra = attrs.smile != null ? `<div style="font-size:.75rem;color:#94a3b8;margin-top:2px;">${attrs.smile ? 'A sorrir' : 'Sem sorriso'}</div>` : '';
+
+    return `<div class="attr-panel">
+        <button class="attr-toggle" onclick="toggleAttr('ab-${uid}')">
+            <span>Analise Facial</span><span id="arr-${uid}">v</span>
+        </button>
+        <div class="attr-body" id="ab-${uid}" style="display:none">
+            <div style="display:flex;gap:.75rem;align-items:center;margin-bottom:.6rem;">
+                <div style="font-size:2rem;line-height:1;">${emoji}</div>
+                <div><div style="font-size:.95rem;font-weight:700;">${emName}</div><div style="font-size:.75rem;color:#94a3b8;">Emocao dominante</div></div>
+                <div style="margin-left:auto;text-align:right;">
+                    <div style="font-size:.95rem;font-weight:700;">${ageStr}</div>
+                    <div style="font-size:.75rem;color:#94a3b8;">${gender}${genderConf}</div>${extra}
+                </div>
+            </div>
+            <div style="font-size:.72rem;font-weight:600;color:#94a3b8;margin-bottom:3px;">EMOCOES</div>
+            ${emBars}
+            ${raceName ? `<div style="font-size:.72rem;font-weight:600;color:#94a3b8;margin:7px 0 3px;">ETNIA · ${raceName}</div>${raceBars}` : ''}
+        </div>
+    </div>`;
+}
+
+function toggleAttr(id) {
+    const el = document.getElementById(id);
+    const arr = document.getElementById('arr-' + id.replace('ab-', ''));
+    if (!el) return;
+    const open = el.style.display === 'none';
+    el.style.display = open ? 'block' : 'none';
+    if (arr) arr.textContent = open ? '^' : 'v';
+}
+
+function resetAll() {
+    file1 = null;
+    file2 = null;
+    ['1', '2'].forEach(n => {
+        document.getElementById('prev' + n).style.display = 'none';
+        document.getElementById('prev' + n).src = '';
+        document.getElementById('box' + n).querySelector('.upload-icon').style.display = '';
+        document.getElementById('box' + n).querySelector('.upload-text').style.display = '';
+        document.getElementById('box' + n).style.borderColor = 'var(--border)';
+        document.getElementById('input' + n).value = '';
+    });
+    document.getElementById('compare-btn').disabled = !isReady();
+    document.getElementById('results-section').style.display = 'none';
+    if (chartInstance) {
+        chartInstance.destroy();
+        chartInstance = null;
+    }
+}
+
+setMode('1:1');
+</script>
+</body>
+</html>

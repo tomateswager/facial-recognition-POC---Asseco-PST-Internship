@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comparação de Modelos - DeepFace POC</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="/js/nav.js"></script>
+</head>
+<body>
+    <nav class="navbar">
+        <div style="display:flex;align-items:center;gap:0.75rem;">
+            <a href="/" class="navbar-brand">🔐 DeepFace POC</a>
+            <div style="display:flex;background:rgba(255,255,255,0.12);border-radius:8px;padding:3px;gap:3px;">
+                <a href="/" style="padding:0.25rem 0.65rem;border-radius:6px;background:rgba(255,255,255,0.9);color:#1e293b;font-size:0.8rem;font-weight:600;text-decoration:none;">DeepFace POC</a>
+                <a href="/aws" style="padding:0.25rem 0.65rem;border-radius:6px;color:rgba(255,255,255,0.85);font-size:0.8rem;font-weight:500;text-decoration:none;">AWS POC</a>
+            </div>
+        </div>
+        <ul class="navbar-nav">
+            <li><a href="/register">Registo</a></li>
+            <li><a href="/verify">1:1</a></li>
+            <li><a href="/identify">1:N</a></li>
+            <li><a href="/multi">Multi-Pessoa</a></li>
+            <li><a href="/video">Pesquisa Vídeo</a></li>
+            <li><a href="/live">Câmara Live</a></li>
+            <li><a href="/compare">Comparar Motores</a></li>
+            <li><a href="/models" class="active">Modelos</a></li>
+            <li><a href="/document">Documento ID</a></li>
+            <li><a href="/deepface/config">Configuração</a></li>
+        </ul>
+    </nav>
+
+    <div class="container">
+        <h1 class="page-title">📊 Avaliação Comparativa de Modelos</h1>
+        <p class="page-subtitle">Teste e compare os modelos de reconhecimento facial disponíveis</p>
+
+        <div class="info-box">
+            ℹ️ Carregue duas imagens (da mesma pessoa ou de pessoas diferentes) para avaliar como cada modelo se comporta.
+            São testados: <strong>ArcFace, Facenet512, VGG-Face e SFace</strong>.
+        </div>
+
+        <!-- Informação teórica dos modelos -->
+        <div class="card">
+            <div class="card-title">📋 Informação dos Modelos</div>
+            <div id="model-info" style="overflow-x:auto;">A carregar...</div>
+        </div>
+
+        <!-- Teste prático -->
+        <div class="card">
+            <div class="card-title">🧪 Teste Comparativo</div>
+            <p style="color:var(--gray-500);font-size:0.9rem;margin-bottom:1rem;">
+                Carregue duas imagens para comparar todos os modelos numa verificação 1:1.
+            </p>
+
+            <div class="image-grid">
+                <!-- Imagem 1 -->
+                <div id="container-1">
+                    <div class="image-box">
+                        <div class="image-label">Imagem 1</div>
+                        <div class="placeholder" style="display:flex;flex-direction:column;align-items:center;">
+                            <div style="font-size:2rem;margin-bottom:0.5rem;">👤</div>
+                            <p style="color:var(--gray-500);font-size:0.85rem;">Primeiro rosto</p>
+                        </div>
+                        <img class="preview-img" style="display:none;">
+                        <input type="file" accept="image/*" style="display:none;" onchange="handleFile(this, 1)">
+                        <div class="btn-group">
+                            <button class="btn btn-file" onclick="triggerFile(1)">📁 Ficheiro</button>
+                            <button class="btn btn-clear" style="display:none;" onclick="clearImage(1)">✕ Limpar</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Imagem 2 -->
+                <div id="container-2">
+                    <div class="image-box">
+                        <div class="image-label">Imagem 2</div>
+                        <div class="placeholder" style="display:flex;flex-direction:column;align-items:center;">
+                            <div style="font-size:2rem;margin-bottom:0.5rem;">👤</div>
+                            <p style="color:var(--gray-500);font-size:0.85rem;">Segundo rosto</p>
+                        </div>
+                        <img class="preview-img" style="display:none;">
+                        <input type="file" accept="image/*" style="display:none;" onchange="handleFile(this, 2)">
+                        <div class="btn-group">
+                            <button class="btn btn-file" onclick="triggerFile(2)">📁 Ficheiro</button>
+                            <button class="btn btn-clear" style="display:none;" onclick="clearImage(2)">✕ Limpar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="text-align:center;margin-top:1.5rem;">
+                <button id="btn-compare" class="btn btn-primary btn-lg" onclick="doCompare()" disabled>
+                    📊 Comparar Modelos
+                </button>
+            </div>
+        </div>
+
+        <div class="loading">
+            <div class="spinner"></div>
+            <div class="loading-text">A testar modelos... (isto pode demorar 30-60 segundos)</div>
+        </div>
+
+        <div id="result" class="result-box"></div>
+
+        <div id="comparison-results" style="display:none;">
+            <div class="card">
+                <div class="card-title">📊 Matriz Comparativa</div>
+                <div id="comparison-table" style="overflow-x:auto;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let blob1 = null;
+        let blob2 = null;
+
+        function triggerFile(side) {
+            document.querySelector(`#container-${side} input[type="file"]`).click();
+        }
+
+        function handleFile(input, side) {
+            if (!input.files || !input.files[0]) return;
+            const file = input.files[0];
+            const container = document.getElementById(`container-${side}`);
+
+            const img = container.querySelector('.preview-img');
+            img.src = URL.createObjectURL(file);
+            img.style.display = 'block';
+
+            container.querySelector('.placeholder').style.display = 'none';
+            container.querySelector('.btn-file').style.display = 'none';
+            container.querySelector('.btn-clear').style.display = 'inline-flex';
+
+            if (side === 1) blob1 = file;
+            else blob2 = file;
+
+            checkReady();
+        }
+
+        function clearImage(side) {
+            const container = document.getElementById(`container-${side}`);
+            container.querySelector('.preview-img').style.display = 'none';
+            container.querySelector('.preview-img').src = '';
+            container.querySelector('.placeholder').style.display = 'flex';
+            container.querySelector('.btn-file').style.display = 'inline-flex';
+            container.querySelector('.btn-clear').style.display = 'none';
+            container.querySelector('input[type="file"]').value = '';
+
+            if (side === 1) blob1 = null;
+            else blob2 = null;
+
+            checkReady();
+            document.getElementById('result').className = 'result-box';
+            document.getElementById('result').innerHTML = '';
+            document.getElementById('comparison-results').style.display = 'none';
+        }
+
+        function checkReady() {
+            document.getElementById('btn-compare').disabled = !(blob1 && blob2);
+        }
+
+        async function doCompare() {
+            if (!blob1 || !blob2) return;
+
+            setLoading(true);
+            document.getElementById('comparison-results').style.display = 'none';
+
+            const formData = new FormData();
+            formData.append('image1', blob1, 'face1.jpg');
+            formData.append('image2', blob2, 'face2.jpg');
+
+            try {
+                const res = await fetch('/api/models/compare', { method: 'POST', body: formData });
+                const data = await res.json();
+
+                if (data.success) {
+                    showResult('success', '✅ Avaliação Completa',
+                        `${data.models_tested} modelos testados. Mais rápido: <strong>${data.best_speed || 'N/A'}</strong>`);
+
+                    let html = '<table class="comparison-table"><thead><tr>' +
+                        '<th>Modelo</th><th>Resultado</th><th>Distância</th><th>Threshold</th><th>Tempo (ms)</th><th>Memória (MB)</th>' +
+                        '</tr></thead><tbody>';
+
+                    data.results.forEach(r => {
+                        if (r.success) {
+                            const isBest = r.model === data.best_speed;
+                            html += `<tr>
+                                <td><strong>${r.model}</strong> ${isBest ? '<span class="badge badge-best">⚡ Mais rápido</span>' : ''}</td>
+                                <td><span class="badge ${r.verified ? 'badge-success' : 'badge-error'}">${r.verified ? '✅ Mesma' : '❌ Diferente'}</span></td>
+                                <td>${r.distance.toFixed(4)}</td>
+                                <td>${r.threshold.toFixed(4)}</td>
+                                <td>${r.processing_time_ms.toFixed(0)}</td>
+                                <td>${r.memory_total_mb.toFixed(0)}</td>
+                            </tr>`;
+                        } else {
+                            html += `<tr>
+                                <td><strong>${r.model}</strong></td>
+                                <td colspan="5" style="color:var(--error);">Erro: ${r.error}</td>
+                            </tr>`;
+                        }
+                    });
+
+                    html += '</tbody></table>';
+                    document.getElementById('comparison-table').innerHTML = html;
+                    document.getElementById('comparison-results').style.display = 'block';
+                } else {
+                    showResult('warning', '⚠️ Erro', data.message);
+                }
+            } catch (e) {
+                showResult('error', '❌ Erro', 'Erro de comunicação: ' + e.message);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        function showResult(type, title, html) {
+            const box = document.getElementById('result');
+            box.className = `result-box show result-${type}`;
+            box.innerHTML = `<div class="result-title">${title}</div><div class="result-details">${html}</div>`;
+        }
+
+        function setLoading(active) {
+            document.querySelector('.loading').classList.toggle('show', active);
+            document.getElementById('btn-compare').disabled = active;
+        }
+
+        // Carregar informação teórica dos modelos
+        async function loadModelInfo() {
+            try {
+                const res = await fetch('/api/models/info');
+                const data = await res.json();
+                if (data.success) {
+                    let html = '<table class="comparison-table"><thead><tr>' +
+                        '<th>Modelo</th><th>Precisão LFW</th><th>Embedding</th><th>Arquitetura</th><th>Notas</th>' +
+                        '</tr></thead><tbody>';
+                    data.models.forEach(m => {
+                        html += `<tr>
+                            <td><strong>${m.name}</strong></td>
+                            <td>${m.accuracy_lfw}</td>
+                            <td>${m.embedding_size}d</td>
+                            <td>${m.architecture}</td>
+                            <td style="font-size:0.8rem;color:var(--gray-500);">${m.notes}</td>
+                        </tr>`;
+                    });
+                    html += '</tbody></table>';
+                    document.getElementById('model-info').innerHTML = html;
+                }
+            } catch (e) {
+                document.getElementById('model-info').textContent = 'Erro ao carregar informação.';
+            }
+        }
+
+        loadModelInfo();
+    </script>
+</body>
+</html>

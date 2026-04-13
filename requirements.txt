@@ -1,0 +1,14 @@
+fastapi>=0.100.0
+uvicorn>=0.23.0
+python-multipart>=0.0.6
+deepface>=0.0.89
+opencv-python>=4.8.0
+numpy>=1.24.0
+Pillow>=10.0.0
+psutil>=5.9.0
+easyocr>=1.7.0
+# GPU face detection (RetinaFace via ONNX Runtime)
+# DirectML: GPU nativa Windows sem CUDA Toolkit (recomendado)
+# Para CUDA: pip install onnxruntime-gpu + instalar CUDA Toolkit 12.x
+insightface>=0.7.3
+onnxruntime-directml>=1.19.0

@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Estatísticas - AWS Rekognition</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        .summary-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:1rem; margin-bottom:1.5rem; }
+        .summary-card { background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:10px; padding:1rem; text-align:center; }
+        .summary-card .s-label { font-size:0.75rem; color:#9ca3af; margin-bottom:0.3rem; }
+        .summary-card .s-value { font-size:1.6rem; font-weight:700; color:#e2e8f0; }
+        .summary-card .s-sub { font-size:0.75rem; color:#6b7280; margin-top:0.2rem; }
+
+        /* Tabs */
+        .tabs { display:flex; gap:0; border-bottom:2px solid rgba(255,255,255,0.1); margin-bottom:1.5rem; flex-wrap:wrap; }
+        .tab-btn { padding:0.6rem 1.1rem; background:none; border:none; color:#9ca3af; cursor:pointer; font-size:0.88rem; font-weight:500; border-bottom:2px solid transparent; margin-bottom:-2px; transition:all 0.15s; }
+        .tab-btn:hover { color:#e2e8f0; }
+        .tab-btn.active { color:#818cf8; border-bottom-color:#818cf8; font-weight:600; }
+        .tab-panel { display:none; }
+        .tab-panel.active { display:block; }
+
+        /* Tables */
+        .data-table { width:100%; border-collapse:collapse; font-size:0.85rem; }
+        .data-table th { text-align:left; padding:0.5rem 0.75rem; color:#9ca3af; font-weight:600; border-bottom:2px solid rgba(255,255,255,0.1); }
+        .data-table td { padding:0.5rem 0.75rem; border-bottom:1px solid rgba(255,255,255,0.05); }
+        .data-table tr:last-child td { border-bottom:none; }
+        .data-table .num { text-align:right; font-family:monospace; }
+
+        .op-badge { display:inline-block; padding:0.15rem 0.5rem; border-radius:4px; font-size:0.75rem; font-weight:600; }
+        .op-compare { background:rgba(102,126,234,0.2); color:#818cf8; }
+        .op-search  { background:rgba(16,185,129,0.2);  color:#34d399; }
+        .op-index   { background:rgba(245,158,11,0.2);  color:#fbbf24; }
+
+        .no-data { text-align:center; padding:3rem 1rem; color:#6b7280; }
+        .no-data .no-data-icon { font-size:2.5rem; margin-bottom:0.5rem; }
+
+        .chart-wrap { max-width:600px; margin:1.5rem auto; }
+        .two-col { display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; }
+        .stat-item { padding:0.6rem 0; border-bottom:1px solid rgba(255,255,255,0.06); display:flex; justify-content:space-between; font-size:0.88rem; }
+        .stat-item:last-child { border-bottom:none; }
+        .stat-key { color:#9ca3af; }
+        .stat-val { font-weight:600; }
+
+        /* Quotas */
+        .quota-table { width:100%; border-collapse:collapse; font-size:0.85rem; }
+        .quota-table th { text-align:left; padding:0.5rem 0.75rem; color:#9ca3af; font-weight:600; border-bottom:2px solid rgba(255,255,255,0.1); }
+        .quota-table td { padding:0.5rem 0.75rem; border-bottom:1px solid rgba(255,255,255,0.05); }
+        .quota-table tr:last-child td { border-bottom:none; }
+        .quota-val { color:#667eea; font-weight:600; text-align:center; }
+    </style>
+    <script src="/js/nav.js"></script>
+</head>
+<body>
+    <nav class="navbar">
+        <div style="display:flex;align-items:center;gap:0.75rem;">
+            <a href="/aws" class="navbar-brand">☁️ AWS POC</a>
+            <div style="display:flex;background:rgba(255,255,255,0.12);border-radius:8px;padding:3px;gap:3px;">
+                <a href="/" style="padding:0.25rem 0.65rem;border-radius:6px;color:rgba(255,255,255,0.85);font-size:0.8rem;font-weight:500;text-decoration:none;">DeepFace POC</a>
+                <a href="/aws" style="padding:0.25rem 0.65rem;border-radius:6px;background:rgba(255,255,255,0.9);color:#1e293b;font-size:0.8rem;font-weight:600;text-decoration:none;">AWS POC</a>
+            </div>
+        </div>
+        <ul class="navbar-nav">
+            <li><a href="/aws/register">Registo</a></li>
+            <li><a href="/aws/verify">1:1</a></li>
+            <li><a href="/aws/identify">1:N</a></li>
+            <li><a href="/aws/multi">Multi-Pessoa</a></li>
+            <li><a href="/compare">Comparar Motores</a></li>
+            <li><a href="/aws/stats" class="active">Estatísticas</a></li>
+            <li><a href="/aws/config">Configuração</a></li>
+        </ul>
+    </nav>
+
+    <div class="container">
+        <h1 class="page-title">📊 Métricas &amp; Performance</h1>
+        <p class="page-subtitle">Análise de confidence scores, latência e performance do sistema</p>
+
+        <!-- Resumo -->
+        <div class="summary-grid">
+            <div class="summary-card">
+                <div class="s-label">Total Chamadas API</div>
+                <div class="s-value" id="s-total">—</div>
+                <div class="s-sub">desde o arranque</div>
+            </div>
+            <div class="summary-card">
+                <div class="s-label">Latência Média</div>
+                <div class="s-value" id="s-avg-lat">—</div>
+                <div class="s-sub" id="s-avg-lat-sub"></div>
+            </div>
+            <div class="summary-card">
+                <div class="s-label">Latência P95</div>
+                <div class="s-value" id="s-p95">—</div>
+                <div class="s-sub">percentil 95</div>
+            </div>
+            <div class="summary-card">
+                <div class="s-label">Taxa de Erro</div>
+                <div class="s-value" id="s-errors">—</div>
+                <div class="s-sub">chamadas falhadas</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab-btn active" onclick="switchTab('latency')">⏱️ Latência</button>
+                <button class="tab-btn" onclick="switchTab('confidence')">🎯 Confidence</button>
+                <button class="tab-btn" onclick="switchTab('verifid')">✅ Verificação/Identificação</button>
+                <button class="tab-btn" onclick="switchTab('raw')">📋 Dados Raw</button>
+            </div>
+
+            <!-- Tab: Latência -->
+            <div class="tab-panel active" id="tab-latency">
+                <h3 style="font-size:1rem;font-weight:700;margin-bottom:1rem;">Latência por Operação</h3>
+                <div id="latency-content">
+                    <div class="no-data"><div class="no-data-icon">⏳</div>Ainda não foram feitas chamadas à API. Usa as outras páginas para gerar dados.</div>
+                </div>
+            </div>
+
+            <!-- Tab: Confidence -->
+            <div class="tab-panel" id="tab-confidence">
+                <h3 style="font-size:1rem;font-weight:700;margin-bottom:1rem;">Confidence Scores</h3>
+                <div id="confidence-content">
+                    <div class="no-data"><div class="no-data-icon">🎯</div>Sem dados de confidence registados.</div>
+                </div>
+            </div>
+
+            <!-- Tab: Verificação/Identificação -->
+            <div class="tab-panel" id="tab-verifid">
+                <div class="two-col" id="verifid-content">
+                    <div>
+                        <h3 style="font-size:1rem;font-weight:700;margin-bottom:1rem;">Verificação 1:1</h3>
+                        <div id="verify-content"><div class="no-data"><div class="no-data-icon">🔍</div>Sem dados de verificação.</div></div>
+                    </div>
+                    <div>
+                        <h3 style="font-size:1rem;font-weight:700;margin-bottom:1rem;">Identificação 1:N</h3>
+                        <div id="identify-content"><div class="no-data"><div class="no-data-icon">🎯</div>Sem dados de identificação.</div></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab: Dados Raw -->
+            <div class="tab-panel" id="tab-raw">
+                <h3 style="font-size:1rem;font-weight:700;margin-bottom:1rem;">Dados Raw — Últimas Operações</h3>
+                <div id="raw-content">
+                    <div class="no-data"><div class="no-data-icon">📋</div>Sem dados registados.</div>
+                </div>
+                <div style="margin-top:1rem;display:flex;gap:0.75rem;justify-content:flex-end;">
+                    <button class="btn" onclick="loadAll()" style="font-size:0.82rem;">🔄 Atualizar</button>
+                    <button class="btn" onclick="clearMetrics()" style="font-size:0.82rem;color:#f87171;">🗑️ Limpar Métricas</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Coleção AWS -->
+        <div class="card" style="margin-top:1.5rem;">
+            <div class="card-title">👥 Pessoas Registadas na Coleção</div>
+            <div id="people-loading" style="text-align:center;padding:2rem;color:#aaa;">A carregar...</div>
+            <div id="people-error" style="display:none;color:#f87171;padding:1rem;text-align:center;"></div>
+            <div id="people-empty" style="display:none;text-align:center;padding:2rem;color:#aaa;">
+                <div style="font-size:2rem;">📭</div>
+                <div style="margin-top:0.5rem;">Nenhuma face registada.</div>
+                <a href="/aws/register" class="btn btn-primary" style="margin-top:1rem;display:inline-flex;">➕ Registar Pessoa</a>
+            </div>
+            <div id="people-table" style="display:none;">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Nome</th>
+                            <th class="num">Confiança</th>
+                            <th class="num">Face ID</th>
+                            <th style="text-align:center;">Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody id="people-tbody"></tbody>
+                </table>
+            </div>
+            <div style="margin-top:1rem;text-align:right;">
+                <button class="btn" style="font-size:0.8rem;" onclick="loadStats()">🔄 Atualizar</button>
+            </div>
+        </div>
+
+        <!-- Quotas e Limitações -->
+        <div class="card" style="margin-top:1.5rem;">
+            <div class="card-title">⚠️ Limitações e Quotas AWS Rekognition</div>
+            <p style="font-size:0.83rem;color:#aaa;margin-bottom:1rem;">
+                Valores de referência para a região <strong>eu-west-1</strong>. Fonte:
+                <a href="https://docs.aws.amazon.com/rekognition/latest/dg/limits.html" target="_blank" style="color:#818cf8;">AWS Rekognition Service Limits</a>
+            </p>
+            <table class="quota-table">
+                <thead>
+                    <tr>
+                        <th>Recurso</th>
+                        <th style="text-align:center;">Limite (padrão)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>Chamadas CompareFaces</td><td class="quota-val">25 TPS</td></tr>
+                    <tr><td>Chamadas DetectFaces</td><td class="quota-val">25 TPS</td></tr>
+                    <tr><td>Chamadas SearchFacesByImage</td><td class="quota-val">25 TPS</td></tr>
+                    <tr><td>Chamadas IndexFaces</td><td class="quota-val">25 TPS</td></tr>
+                    <tr><td>Faces por coleção</td><td class="quota-val">20 milhões</td></tr>
+                    <tr><td>Coleções por conta</td><td class="quota-val">1 000</td></tr>
+                    <tr><td>Tamanho máximo da imagem (S3)</td><td class="quota-val">15 MB</td></tr>
+                    <tr><td>Tamanho máximo da imagem (bytes diretos)</td><td class="quota-val">5 MB</td></tr>
+                    <tr><td>Dimensão mínima da face</td><td class="quota-val">40 × 40 px</td></tr>
+                </tbody>
+            </table>
+            <div style="margin-top:1rem;padding:0.75rem;background:rgba(102,126,234,0.08);border-radius:8px;font-size:0.8rem;color:#9ca3af;line-height:1.6;">
+                <strong style="color:#c7d2fe;">Custos estimados (eu-west-1):</strong><br>
+                CompareFaces: ~$0.001 por chamada &nbsp;|&nbsp;
+                SearchFacesByImage: ~$0.001 por chamada &nbsp;|&nbsp;
+                IndexFaces: ~$0.001 por chamada + armazenamento &nbsp;|&nbsp;
+                Armazenamento: ~$0.00001 / face / mês<br>
+                <em>Os limites de TPS podem ser aumentados via AWS Support.</em>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let _charts = {};
+
+        function switchTab(name) {
+            document.querySelectorAll('.tab-btn').forEach((b,i) => {
+                const names = ['latency','confidence','verifid','raw'];
+                b.classList.toggle('active', names[i] === name);
+            });
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+            document.getElementById(`tab-${name}`).classList.add('active');
+        }
+
+        function destroyChart(id) {
+            if (_charts[id]) { _charts[id].destroy(); delete _charts[id]; }
+        }
+
+        function renderLatency(summary) {
+            const ops = Object.entries(summary.operations || {});
+            if (!ops.length) {
+                document.getElementById('latency-content').innerHTML =
+                    '<div class="no-data"><div class="no-data-icon">⏳</div>Ainda não foram feitas chamadas à API. Usa as outras páginas para gerar dados.</div>';
+                return;
+            }
+
+            // Table
+            let html = `<table class="data-table">
+                <thead><tr>
+                    <th>Operação</th><th class="num">Chamadas</th>
+                    <th class="num">Média (ms)</th><th class="num">Mediana (ms)</th>
+                    <th class="num">P95 (ms)</th><th class="num">P99 (ms)</th>
+                    <th class="num">Min (ms)</th><th class="num">Max (ms)</th>
+                </tr></thead><tbody>`;
+            ops.forEach(([op, s]) => {
+                const cls = op === 'CompareFaces' ? 'op-compare' : op === 'SearchFacesByImage' ? 'op-search' : 'op-index';
+                html += `<tr>
+                    <td><span class="op-badge ${cls}">${op}</span></td>
+                    <td class="num">${s.count}</td>
+                    <td class="num">${s.avg_ms}</td>
+                    <td class="num">${s.p50_ms}</td>
+                    <td class="num">${s.p95_ms}</td>
+                    <td class="num">${s.p99_ms}</td>
+                    <td class="num">${s.min_ms}</td>
+                    <td class="num">${s.max_ms}</td>
+                </tr>`;
+            });
+            html += '</tbody></table><div class="chart-wrap"><canvas id="chart-latency"></canvas></div>';
+            document.getElementById('latency-content').innerHTML = html;
+
+            // Bar chart
+            destroyChart('chart-latency');
+            const labels = ops.map(([op]) => op);
+            _charts['chart-latency'] = new Chart(document.getElementById('chart-latency'), {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [
+                        { label: 'Média (ms)', data: ops.map(([,s]) => s.avg_ms), backgroundColor: 'rgba(102,126,234,0.7)' },
+                        { label: 'P95 (ms)',   data: ops.map(([,s]) => s.p95_ms), backgroundColor: 'rgba(245,158,11,0.7)' },
+                    ]
+                },
+                options: { responsive: true, plugins: { title: { display: true, text: 'Latência Média vs P95 por Operação', color: '#e2e8f0' }, legend: { labels: { color: '#9ca3af' } } }, scales: { x: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255,255,255,0.05)' } }, y: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255,255,255,0.05)' }, title: { display: true, text: 'ms', color: '#9ca3af' } } } }
+            });
+        }
+
+        function renderConfidence(data) {
+            const scores = data.confidences || [];
+            if (!scores.length) {
+                document.getElementById('confidence-content').innerHTML =
+                    '<div class="no-data"><div class="no-data-icon">🎯</div>Sem dados de confidence registados.</div>';
+                return;
+            }
+            const avg = scores.reduce((a,b)=>a+b,0)/scores.length;
+            const sorted = [...scores].sort((a,b)=>a-b);
+            const median = sorted[Math.floor(sorted.length/2)];
+            const std = Math.sqrt(scores.map(s=>(s-avg)**2).reduce((a,b)=>a+b,0)/scores.length);
+
+            let html = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem;">
+                <div class="summary-card"><div class="s-label">Média</div><div class="s-value">${avg.toFixed(1)}%</div></div>
+                <div class="summary-card"><div class="s-label">Mediana</div><div class="s-value">${median.toFixed(1)}%</div></div>
+                <div class="summary-card"><div class="s-label">Desvio Padrão</div><div class="s-value">${std.toFixed(1)}</div></div>
+            </div><div class="chart-wrap"><canvas id="chart-conf-hist"></canvas></div>`;
+            document.getElementById('confidence-content').innerHTML = html;
+
+            // Histogram — bucket into 10% bins
+            const bins = Array(10).fill(0);
+            scores.forEach(s => { const i = Math.min(9, Math.floor(s / 10)); bins[i]++; });
+            destroyChart('chart-conf-hist');
+            _charts['chart-conf-hist'] = new Chart(document.getElementById('chart-conf-hist'), {
+                type: 'bar',
+                data: {
+                    labels: ['0-10%','10-20%','20-30%','30-40%','40-50%','50-60%','60-70%','70-80%','80-90%','90-100%'],
+                    datasets: [{ label: 'Frequência', data: bins, backgroundColor: 'rgba(102,126,234,0.7)' }]
+                },
+                options: { responsive: true, plugins: { title: { display: true, text: 'Distribuição de Confidence Scores', color: '#e2e8f0' }, legend: { display: false } }, scales: { x: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255,255,255,0.05)' } }, y: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255,255,255,0.05)' }, title: { display: true, text: 'Frequência', color: '#9ca3af' } } } }
+            });
+        }
+
+        function renderVerifId(data) {
+            const v = data.verification;
+            const id = data.identification;
+
+            // Verify
+            if (v.total > 0) {
+                let html = `<div>
+                    <div class="stat-item"><span class="stat-key">Total Verificações</span><span class="stat-val">${v.total}</span></div>
+                    <div class="stat-item"><span class="stat-key">Taxa de Sucesso</span><span class="stat-val" style="color:${v.success_rate>=70?'#22c55e':'#f87171'}">${v.success_rate}%</span></div>
+                    <div class="stat-item"><span class="stat-key">Similaridade Média</span><span class="stat-val">${v.avg_similarity}%</span></div>
+                    <div class="stat-item"><span class="stat-key">Matches</span><span class="stat-val" style="color:#22c55e">${v.matches}</span></div>
+                    <div class="stat-item"><span class="stat-key">Sem Match</span><span class="stat-val" style="color:#f87171">${v.no_matches}</span></div>
+                </div><div class="chart-wrap"><canvas id="chart-verify-pie"></canvas></div>`;
+                document.getElementById('verify-content').innerHTML = html;
+                destroyChart('chart-verify-pie');
+                _charts['chart-verify-pie'] = new Chart(document.getElementById('chart-verify-pie'), {
+                    type: 'pie',
+                    data: { labels: ['Match', 'No Match'], datasets: [{ data: [v.matches, v.no_matches], backgroundColor: ['rgba(34,197,94,0.7)', 'rgba(248,113,113,0.7)'] }] },
+                    options: { responsive: true, plugins: { title: { display: true, text: 'Resultados de Verificação', color: '#e2e8f0' }, legend: { labels: { color: '#9ca3af' } } } }
+                });
+            } else {
+                document.getElementById('verify-content').innerHTML = '<div class="no-data"><div class="no-data-icon">🔍</div>Sem dados de verificação.</div>';
+            }
+
+            // Identify
+            if (id.total > 0) {
+                document.getElementById('identify-content').innerHTML = `<div>
+                    <div class="stat-item"><span class="stat-key">Total Pesquisas</span><span class="stat-val">${id.total}</span></div>
+                    <div class="stat-item"><span class="stat-key">Taxa de Hit</span><span class="stat-val" style="color:${id.hit_rate>=70?'#22c55e':'#f87171'}">${id.hit_rate}%</span></div>
+                    <div class="stat-item"><span class="stat-key">Similaridade Média (top)</span><span class="stat-val">${id.avg_top_similarity}%</span></div>
+                    <div class="stat-item"><span class="stat-key">Identificados</span><span class="stat-val" style="color:#22c55e">${id.hits}</span></div>
+                    <div class="stat-item"><span class="stat-key">Desconhecido</span><span class="stat-val" style="color:#f87171">${id.misses}</span></div>
+                </div>`;
+            } else {
+                document.getElementById('identify-content').innerHTML = '<div class="no-data"><div class="no-data-icon">🎯</div>Sem dados de identificação.</div>';
+            }
+        }
+
+        function renderRaw(recent) {
+            if (!recent.length) {
+                document.getElementById('raw-content').innerHTML =
+                    '<div class="no-data"><div class="no-data-icon">📋</div>Sem dados registados.</div>';
+                return;
+            }
+            let html = `<table class="data-table">
+                <thead><tr>
+                    <th>#</th><th>Operação</th><th class="num">Latência (ms)</th>
+                    <th class="num">Similarity</th><th style="text-align:center;">Resultado</th><th class="num">Timestamp</th>
+                </tr></thead><tbody>`;
+            [...recent].reverse().forEach((m, i) => {
+                const cls = m.operation === 'CompareFaces' ? 'op-compare' : m.operation === 'SearchFacesByImage' ? 'op-search' : 'op-index';
+                const sim = m.similarity ?? m.top_similarity;
+                const ts = new Date(m.timestamp * 1000).toLocaleTimeString('pt-PT');
+                html += `<tr>
+                    <td style="color:#6b7280">${i+1}</td>
+                    <td><span class="op-badge ${cls}">${m.operation}</span></td>
+                    <td class="num">${m.latency_ms}</td>
+                    <td class="num">${sim != null ? sim.toFixed(1)+'%' : '—'}</td>
+                    <td style="text-align:center;">${m.success ? '<span style="color:#22c55e">✅</span>' : '<span style="color:#f87171">❌</span>'}</td>
+                    <td class="num" style="color:#6b7280">${ts}</td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            document.getElementById('raw-content').innerHTML = html;
+        }
+
+        async function loadAll() {
+            try {
+                const res = await fetch('/api/aws/metrics');
+                const data = await res.json();
+                const summary = data.summary || {};
+
+                // Summary cards
+                document.getElementById('s-total').textContent = summary.total_operations ?? 0;
+                const allLatencies = Object.values(summary.operations || {});
+                if (allLatencies.length) {
+                    const avgAll = allLatencies.map(o => o.avg_ms);
+                    const avg = avgAll.reduce((a,b)=>a+b,0) / avgAll.length;
+                    const p95s = allLatencies.map(o => o.p95_ms);
+                    const p95 = Math.max(...p95s);
+                    const totalErr = allLatencies.reduce((a,o)=>a+o.errors,0);
+                    const errRate = summary.total_operations > 0 ? (totalErr/summary.total_operations*100).toFixed(1) : 0;
+                    document.getElementById('s-avg-lat').textContent = `${avg.toFixed(0)}ms`;
+                    document.getElementById('s-p95').textContent = `${p95.toFixed(0)}ms`;
+                    document.getElementById('s-errors').textContent = `${errRate}%`;
+                } else {
+                    ['s-avg-lat','s-p95','s-errors'].forEach(id => document.getElementById(id).textContent = '—');
+                }
+
+                renderLatency(summary);
+                renderConfidence(data);
+                renderVerifId(data);
+                renderRaw(data.recent || []);
+            } catch(e) {
+                console.error(e);
+            }
+        }
+
+        async function loadStats() {
+            try {
+                const res = await fetch('/api/aws/stats');
+                const data = await res.json();
+                document.getElementById('people-loading').style.display = 'none';
+                if (data.face_error) {
+                    document.getElementById('people-error').style.display = 'block';
+                    document.getElementById('people-error').textContent = `Erro: ${data.face_error}`;
+                } else if (!data.people || data.people.length === 0) {
+                    document.getElementById('people-empty').style.display = 'block';
+                } else {
+                    document.getElementById('people-table').style.display = 'block';
+                    const tbody = document.getElementById('people-tbody');
+                    tbody.innerHTML = '';
+                    data.people.forEach((p, i) => {
+                        const shortId = p.face_id ? p.face_id.substring(0, 8) + '...' : '—';
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td style="color:#6b7280">${i+1}</td>
+                            <td style="font-weight:600">${p.name}</td>
+                            <td class="num" style="color:#aaa">${p.confidence}%</td>
+                            <td class="num" style="color:#6b7280;font-family:monospace;font-size:0.75rem">${shortId}</td>
+                            <td style="text-align:center">
+                                <button onclick="deletePerson('${p.name}')" style="background:#f87171;border:none;color:white;border-radius:4px;padding:0.2rem 0.5rem;cursor:pointer;font-size:0.75rem;">🗑️</button>
+                            </td>`;
+                        tbody.appendChild(row);
+                    });
+                }
+            } catch(e) {
+                document.getElementById('people-loading').textContent = `Erro: ${e.message}`;
+            }
+        }
+
+        async function deletePerson(name) {
+            if (!confirm(`Apagar "${name}" da coleção AWS?`)) return;
+            try {
+                const res = await fetch(`/api/aws/register/${encodeURIComponent(name)}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.success) loadStats();
+                else alert(data.detail || 'Erro ao apagar');
+            } catch(e) { alert(e.message); }
+        }
+
+        async function clearMetrics() {
+            if (!confirm('Limpar todas as métricas registadas?')) return;
+            await fetch('/api/aws/metrics/clear', { method: 'POST' });
+            loadAll();
+        }
+
+        loadAll();
+        loadStats();
+    </script>
+</body>
+</html>

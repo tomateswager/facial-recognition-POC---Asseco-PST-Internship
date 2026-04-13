@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeepFace POC - Dashboard</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="/js/nav.js"></script>
+</head>
+<body>
+    <nav class="navbar">
+        <div style="display:flex;align-items:center;gap:0.75rem;">
+            <a href="/" class="navbar-brand">🔐 DeepFace POC</a>
+            <div style="display:flex;background:rgba(255,255,255,0.12);border-radius:8px;padding:3px;gap:3px;">
+                <a href="/" style="padding:0.25rem 0.65rem;border-radius:6px;background:rgba(255,255,255,0.9);color:#1e293b;font-size:0.8rem;font-weight:600;text-decoration:none;">DeepFace POC</a>
+                <a href="/aws" style="padding:0.25rem 0.65rem;border-radius:6px;color:rgba(255,255,255,0.85);font-size:0.8rem;font-weight:500;text-decoration:none;">AWS POC</a>
+            </div>
+        </div>
+        <ul class="navbar-nav">
+            <li><a href="/register">Registo</a></li>
+            <li><a href="/verify">1:1</a></li>
+            <li><a href="/identify">1:N</a></li>
+            <li><a href="/multi">Multi-Pessoa</a></li>
+            <li><a href="/video">Pesquisa Vídeo</a></li>
+            <li><a href="/live">Câmara Live</a></li>
+            <li><a href="/compare">Comparar Motores</a></li>
+            <li><a href="/models">Modelos</a></li>
+            <li><a href="/document">Documento ID</a></li>
+            <li><a href="/deepface/config">Configuração</a></li>
+        </ul>
+    </nav>
+
+    <div class="container">
+
+        <!-- Hero -->
+        <div class="dashboard-hero">
+            <div class="hero-title">Reconhecimento Facial</div>
+            <div class="hero-subtitle">Prova de Conceito DeepFace — Asseco PST</div>
+        </div>
+
+        <!-- Feature Cards -->
+        <div class="dashboard-grid">
+            <a href="/register" class="dash-card">
+                <div class="dash-icon">📝</div>
+                <div class="dash-title">Registo Biométrico</div>
+                <div class="dash-desc">Registar novos rostos na base de dados</div>
+            </a>
+            <a href="/verify" class="dash-card">
+                <div class="dash-icon">🔍</div>
+                <div class="dash-title">Verificação 1:1</div>
+                <div class="dash-desc">Comparar dois rostos entre si</div>
+            </a>
+            <a href="/identify" class="dash-card">
+                <div class="dash-icon">🎯</div>
+                <div class="dash-title">Identificação 1:N</div>
+                <div class="dash-desc">Identificar rosto na base de dados</div>
+            </a>
+            <a href="/models" class="dash-card">
+                <div class="dash-icon">📊</div>
+                <div class="dash-title">Comparar Modelos</div>
+                <div class="dash-desc">Avaliar ArcFace, Facenet512, VGG-Face, SFace</div>
+            </a>
+            <a href="/document" class="dash-card">
+                <div class="dash-icon">🪪</div>
+                <div class="dash-title">Documento de ID</div>
+                <div class="dash-desc">Registo tipo banco: CC → câmara → verificação</div>
+            </a>
+        </div>
+
+        <!-- System Stats -->
+        <div id="stat-grid-wrapper" class="stat-grid" style="display:none;">
+            <div class="stat-card">
+                <div class="stat-label">Modelo</div>
+                <div class="stat-value" id="stat-model">—</div>
+                <div class="stat-sub" id="stat-accuracy"></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Detetor</div>
+                <div class="stat-value" id="stat-detector">—</div>
+                <div class="stat-sub">Deteção facial</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Pessoas</div>
+                <div class="stat-value" id="stat-people">—</div>
+                <div class="stat-sub" id="stat-images"></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Threshold</div>
+                <div class="stat-value" id="stat-threshold">—</div>
+                <div class="stat-sub" id="stat-metric"></div>
+            </div>
+        </div>
+
+        <!-- Config details -->
+        <div class="card">
+            <div class="card-title">⚙️ Configuração do Sistema</div>
+            <div id="system-info" class="result-details">A carregar...</div>
+        </div>
+
+        <!-- Registered People -->
+        <div class="card">
+            <div class="card-title">👥 Pessoas Registadas</div>
+            <div id="people-list">A carregar...</div>
+        </div>
+    </div>
+
+    <script>
+        async function loadSystemInfo() {
+            try {
+                const res = await fetch('/api/register/system-info');
+                const data = await res.json();
+
+                // Fill stat cards
+                document.getElementById('stat-model').textContent = data.recognition_model || '—';
+                document.getElementById('stat-accuracy').textContent = '99.83% precisão LFW';
+                document.getElementById('stat-detector').textContent = data.detector_backend || '—';
+                document.getElementById('stat-people').textContent = data.registered_people ?? '—';
+                document.getElementById('stat-images').textContent = (data.total_images ?? '—') + ' imagem(ns) total';
+                document.getElementById('stat-threshold').textContent = data.custom_threshold || '—';
+                document.getElementById('stat-metric').textContent = data.distance_metric || '—';
+                document.getElementById('stat-grid-wrapper').style.display = '';
+
+                // Detail card
+                document.getElementById('system-info').innerHTML = `
+                    <strong>Modelo de Reconhecimento:</strong> ${data.recognition_model} (99.83% precisão LFW)<br>
+                    <strong>Detetor Facial:</strong> ${data.detector_backend}<br>
+                    <strong>Métrica de Distância:</strong> ${data.distance_metric}<br>
+                    <strong>Threshold Personalizado:</strong> ${data.custom_threshold}<br>
+                    <strong>Anti-Spoofing:</strong> ${data.anti_spoofing_note}<br>
+                    <strong>Pessoas Registadas:</strong> ${data.registered_people}<br>
+                    <strong>Total de Imagens:</strong> ${data.total_images}
+                `;
+            } catch (e) {
+                document.getElementById('system-info').textContent = 'Erro ao carregar informação do sistema.';
+            }
+        }
+
+        async function loadPeople() {
+            try {
+                const res = await fetch('/api/register/people');
+                const data = await res.json();
+                const el = document.getElementById('people-list');
+                if (data.people.length === 0) {
+                    el.innerHTML = '<p style="color:var(--gray-500);">Nenhuma pessoa registada. <a href="/register">Registar agora →</a></p>';
+                    return;
+                }
+                el.innerHTML = '<ul class="people-list">' +
+                    data.people.map(p => `
+                        <li class="people-item">
+                            <span class="people-name">👤 ${p.name}</span>
+                            <span class="people-count">${p.num_images} imagem(ns)</span>
+                        </li>
+                    `).join('') + '</ul>';
+            } catch (e) {
+                document.getElementById('people-list').textContent = 'Erro ao carregar lista.';
+            }
+        }
+
+        loadSystemInfo();
+        loadPeople();
+    </script>
+</body>
+</html>

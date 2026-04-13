@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registo - AWS Rekognition</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .mode-tabs { display:flex; gap:0; border-bottom:2px solid rgba(255,255,255,0.1); margin-bottom:1rem; }
+        .mode-tab { padding:0.45rem 1rem; background:none; border:none; color:#9ca3af; cursor:pointer; font-size:0.85rem; font-weight:500; border-bottom:2px solid transparent; margin-bottom:-2px; }
+        .mode-tab.active { color:#818cf8; border-bottom-color:#818cf8; font-weight:600; }
+        .face-attrs { background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:0.85rem; font-size:0.82rem; margin:0.75rem 0; }
+        .face-attrs .fa-title { font-weight:700; color:#c7d2fe; margin-bottom:0.5rem; }
+        .fa-row { display:flex; flex-wrap:wrap; gap:0.5rem 1rem; color:#9ca3af; }
+        .fa-item strong { color:#e2e8f0; }
+        .liveness-frame-wrap { border-radius:8px; overflow:hidden; height:400px; max-width:480px; margin:0 auto; }
+        .liveness-frame-wrap iframe { display:block; border:none; width:100%; height:500px; margin-top:-100px; }
+        .result-liveness { background:rgba(34,197,94,0.1); border:1px solid rgba(34,197,94,0.3); border-radius:8px; padding:0.85rem 1rem; margin-bottom:0.75rem; }
+        .result-liveness .rl-title { color:#22c55e; font-weight:700; }
+        .result-liveness .rl-sub { color:#86efac; font-size:0.8rem; margin-top:0.2rem; }
+        .face-row { display:flex; align-items:center; justify-content:space-between; padding:0.5rem 0; border-bottom:1px solid rgba(255,255,255,0.06); }
+        .face-row:last-child { border-bottom:none; }
+        .face-info { font-size:0.88rem; }
+        .face-info strong { color:#e2e8f0; }
+        .face-id-text { color:#6b7280; font-size:0.8rem; font-family:monospace; }
+        .confirm-overlay { background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); border-radius:6px; padding:0.6rem 0.85rem; margin-top:0.4rem; font-size:0.82rem; color:#fbbf24; }
+    </style>
+    <script src="/js/nav.js"></script>
+</head>
+<body>
+    <nav class="navbar">
+        <div style="display:flex;align-items:center;gap:0.75rem;">
+            <a href="/aws" class="navbar-brand">☁️ AWS POC</a>
+            <div style="display:flex;background:rgba(255,255,255,0.12);border-radius:8px;padding:3px;gap:3px;">
+                <a href="/" style="padding:0.25rem 0.65rem;border-radius:6px;color:rgba(255,255,255,0.85);font-size:0.8rem;font-weight:500;text-decoration:none;">DeepFace POC</a>
+                <a href="/aws" style="padding:0.25rem 0.65rem;border-radius:6px;background:rgba(255,255,255,0.9);color:#1e293b;font-size:0.8rem;font-weight:600;text-decoration:none;">AWS POC</a>
+            </div>
+        </div>
+        <ul class="navbar-nav">
+            <li><a href="/aws/register" class="active">Registo</a></li>
+            <li><a href="/aws/verify">1:1</a></li>
+            <li><a href="/aws/identify">1:N</a></li>
+            <li><a href="/aws/multi">Multi-Pessoa</a></li>
+            <li><a href="/compare">Comparar Motores</a></li>
+            <li><a href="/aws/stats">Estatísticas</a></li>
+            <li><a href="/aws/config">Configuração</a></li>
+        </ul>
+    </nav>
+
+    <div class="container">
+        <h1 class="page-title">📝 Registo de Face</h1>
+        <p class="page-subtitle">Registar faces para verificação 1:1 e identificação 1:N</p>
+
+        <div class="card">
+            <div class="card-title">Dados de Registo</div>
+            <label style="font-size:0.85rem;color:#9ca3af;display:block;margin-bottom:0.3rem;">Nome / ID do Utilizador</label>
+            <input type="text" id="person-name" class="input-text" placeholder="Ex: joao_silva"
+                   style="width:100%;margin-bottom:0.25rem;" oninput="onNameInput(this.value)">
+            <div style="font-size:0.75rem;color:#6b7280;margin-bottom:1rem;">Identificador único para esta pessoa (sem espaços, usar underscore)</div>
+            <div id="name-sanitized" style="font-size:0.78rem;color:#818cf8;margin-bottom:0.75rem;display:none;">
+                Nome guardado como: <strong id="name-sanitized-val"></strong>
+            </div>
+
+            <div id="register-form" style="display:none;">
+                <div class="card-title" style="font-size:0.9rem;margin-bottom:0.75rem;">📸 Captura de Imagem</div>
+                <div class="mode-tabs">
+                    <button class="mode-tab active" id="tab-upload-btn" onclick="setMode('upload')">📁 Upload de Ficheiro</button>
+                    <button class="mode-tab" id="tab-camera-btn" onclick="setMode('camera')">📷 Câmara</button>
+                </div>
+
+                <!-- Upload mode -->
+                <div id="mode-upload">
+                    <input type="file" id="upload-file" accept="image/*,image/jpeg,image/png" style="display:none;" onchange="handleUpload(this)">
+                    <div id="upload-placeholder" style="text-align:center;padding:2rem;border:2px dashed rgba(255,255,255,0.15);border-radius:8px;cursor:pointer;max-width:420px;margin:0 auto;" onclick="document.getElementById('upload-file').click()">
+                        <div style="font-size:2rem;">📁</div>
+                        <p style="color:#6b7280;font-size:0.85rem;margin-top:0.5rem;">Imagem com face frontal, boa iluminação</p>
+                    </div>
+                    <div style="max-width:420px;margin:0 auto;">
+                        <img id="upload-preview" style="display:none;width:100%;border-radius:8px;margin-top:0.5rem;">
+                        <button id="upload-clear" style="display:none;margin-top:0.5rem;" class="btn" onclick="clearUpload()">✕ Limpar</button>
+                        <div id="upload-btn-wrap" style="display:none;margin-top:0.75rem;">
+                            <button class="btn btn-primary" style="width:100%;" onclick="doRegisterUpload()">✅ Registar Face</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Camera / Liveness mode -->
+                <div id="mode-camera" style="display:none;">
+                    <div id="liveness-placeholder" style="text-align:center;padding:2rem;color:#6b7280;display:none;">
+                        <div style="font-size:2rem;">🎭</div>
+                        <p style="font-size:0.85rem;margin-top:0.5rem;">Posiciona o rosto no oval e segue as instruções.</p>
+                    </div>
+                    <div id="liveness-frame" style="display:none;" class="liveness-frame-wrap">
+                        <iframe id="liveness-iframe" src="" allow="camera; microphone"></iframe>
+                    </div>
+                    <img id="liveness-captured" style="display:none;width:100%;max-width:480px;border-radius:8px;display:none;margin:0 auto;display:block;">
+                    <div style="margin-top:0.75rem;display:flex;gap:0.75rem;justify-content:center;">
+                        <button id="btn-confirm" class="btn btn-primary" onclick="doRegisterLiveness()">✅ Confirmar e Registar</button>
+                        <button id="btn-new-challenge" class="btn" onclick="resetLiveness()">🔄 Novo Desafio</button>
+                    </div>
+                    <div id="liveness-status" style="text-align:center;font-size:0.8rem;margin-top:0.4rem;min-height:1.2rem;"></div>
+                </div>
+            </div>
+
+            <div id="name-hint" style="background:rgba(99,102,241,0.08);border-left:3px solid #667eea;padding:0.6rem 0.85rem;border-radius:0 6px 6px 0;font-size:0.82rem;color:#a5b4fc;">
+                ℹ️ Insere um nome/ID para registar uma nova face
+            </div>
+        </div>
+
+        <div class="loading"><div class="spinner"></div><div class="loading-text">A registar face...</div></div>
+
+        <div id="result-area" style="display:none;">
+            <div id="liveness-confirm-card" style="display:none;" class="result-liveness">
+                <div class="rl-title">🎭 Vivacidade Confirmada</div>
+                <div class="rl-sub" id="liveness-confirm-text"></div>
+            </div>
+            <div id="face-attrs-area"></div>
+            <div id="register-result"></div>
+        </div>
+
+        <!-- Coleção AWS -->
+        <div class="card" style="margin-top:1.5rem;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+                <div class="card-title" style="margin:0;">👥 Faces na Coleção AWS</div>
+                <div style="display:flex;gap:0.5rem;">
+                    <button class="btn" style="font-size:0.8rem;padding:0.3rem 0.7rem;" onclick="loadCollection()">🔄 Atualizar lista</button>
+                    <button id="btn-delete-all" class="btn" style="font-size:0.8rem;padding:0.3rem 0.7rem;color:#f87171;" onclick="confirmDeleteAll()">🗑️ Apagar Tudo</button>
+                </div>
+            </div>
+            <p style="font-size:0.8rem;color:#6b7280;margin-bottom:1rem;">Estas faces estão guardadas nos servidores AWS e persistem entre sessões.</p>
+
+            <div id="confirm-delete-all" style="display:none;" class="confirm-overlay">
+                ⚠️ Tens a certeza que queres apagar <strong id="delete-all-count">todas</strong> as faces? Esta ação é irreversível.
+                <div style="display:flex;gap:0.5rem;margin-top:0.5rem;">
+                    <button class="btn btn-primary" style="font-size:0.8rem;padding:0.3rem 0.7rem;background:#f87171;border-color:#f87171;" onclick="doDeleteAll()">✅ Sim, apagar tudo</button>
+                    <button class="btn" style="font-size:0.8rem;padding:0.3rem 0.7rem;" onclick="document.getElementById('confirm-delete-all').style.display='none'">❌ Cancelar</button>
+                </div>
+            </div>
+
+            <div id="collection-loading" style="text-align:center;padding:2rem;color:#aaa;">A carregar...</div>
+            <div id="collection-empty" style="display:none;text-align:center;padding:2rem;color:#6b7280;">Nenhuma face na coleção AWS.</div>
+            <div id="collection-list"></div>
+        </div>
+    </div>
+
+    <script>
+        let captureMode = 'upload';
+        let uploadBlob = null;
+        let livenessSessionId = null;
+        let currentFaces = [];
+
+        function sanitizeName(name) {
+            return name.trim()
+                .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-zA-Z0-9_.\-:]/g, '_')
+                .replace(/^_+|_+$/g, '');
+        }
+
+        function onNameInput(val) {
+            const sanitized = sanitizeName(val);
+            const hasName = sanitized.length > 0;
+            document.getElementById('register-form').style.display = hasName ? '' : 'none';
+            document.getElementById('name-hint').style.display = hasName ? 'none' : '';
+            document.getElementById('name-sanitized').style.display = (hasName && sanitized !== val.trim()) ? '' : 'none';
+            document.getElementById('name-sanitized-val').textContent = sanitized;
+        }
+
+        function setMode(m) {
+            captureMode = m;
+            document.getElementById('tab-upload-btn').classList.toggle('active', m==='upload');
+            document.getElementById('tab-camera-btn').classList.toggle('active', m==='camera');
+            document.getElementById('mode-upload').style.display = m==='upload' ? '' : 'none';
+            document.getElementById('mode-camera').style.display = m==='camera' ? '' : 'none';
+            uploadBlob = null; livenessSessionId = null;
+            document.getElementById('result-area').style.display = 'none';
+            if (m==='camera') startLiveness();
+        }
+
+        function handleUpload(input) {
+            if (!input.files[0]) return;
+            uploadBlob = input.files[0];
+            document.getElementById('upload-placeholder').style.display = 'none';
+            document.getElementById('upload-preview').src = URL.createObjectURL(uploadBlob);
+            document.getElementById('upload-preview').style.display = 'block';
+            document.getElementById('upload-clear').style.display = 'inline-flex';
+            document.getElementById('upload-btn-wrap').style.display = 'block';
+        }
+
+        function clearUpload() {
+            uploadBlob = null;
+            document.getElementById('upload-file').value = '';
+            document.getElementById('upload-placeholder').style.display = 'block';
+            document.getElementById('upload-preview').style.display = 'none';
+            document.getElementById('upload-clear').style.display = 'none';
+            document.getElementById('upload-btn-wrap').style.display = 'none';
+        }
+
+        async function startLiveness() {
+            document.getElementById('liveness-placeholder').style.display = 'block';
+            document.getElementById('liveness-frame').style.display = 'none';
+            document.getElementById('liveness-captured').style.display = 'none';
+            document.getElementById('liveness-status').innerHTML = '<span style="color:#ccc;">A iniciar Face Liveness...</span>';
+            document.getElementById('btn-confirm').disabled = true;
+            try {
+                const res = await fetch('/api/aws/liveness/create', {method:'POST'});
+                const data = await res.json();
+                if (!data.success) throw new Error(data.detail||'Erro');
+                livenessSessionId = data.session_id;
+                document.getElementById('liveness-iframe').src = `http://localhost:5001/?sessionId=${livenessSessionId}&parentOrigin=http://localhost:8000`;
+                document.getElementById('liveness-placeholder').style.display = 'none';
+                document.getElementById('liveness-frame').style.display = 'block';
+                document.getElementById('btn-confirm').disabled = false;
+                document.getElementById('liveness-status').innerHTML = '<span style="color:#ccc;">Posiciona o rosto no oval e segue as instruções.</span>';
+            } catch(e) {
+                document.getElementById('liveness-status').innerHTML = `<span style="color:#f87171;">❌ ${e.message}</span>`;
+                document.getElementById('btn-confirm').disabled = false;
+            }
+        }
+
+        function resetLiveness() {
+            livenessSessionId = null;
+            document.getElementById('result-area').style.display = 'none';
+            startLiveness();
+        }
+
+        const EMOTION_EMOJI = {'HAPPY':'😄','SAD':'😢','ANGRY':'😠','CONFUSED':'😕','DISGUSTED':'🤢','SURPRISED':'😲','CALM':'😌','FEAR':'😨','UNKNOWN':'🤷'};
+        const EMOTION_PT   = {'HAPPY':'Feliz','SAD':'Triste','ANGRY':'Irritado','CONFUSED':'Confuso','DISGUSTED':'Enojado','SURPRISED':'Surpreso','CALM':'Calmo','FEAR':'Medo','UNKNOWN':'Desconhecido'};
+
+        function renderFaceAttrs(face, title) {
+            if (!face) return '';
+            const emotions = face.emotions || [];
+            const topE = emotions[0];
+            const age = face.age_range || {};
+
+            const mc = (lbl, val, delta) =>
+                `<div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:0.65rem 0.75rem;text-align:center;">
+                    <div style="font-size:0.7rem;color:#9ca3af;margin-bottom:0.25rem;">${lbl}</div>
+                    <div style="font-size:1rem;font-weight:700;color:#e2e8f0;">${val}</div>
+                    ${delta ? `<div style="font-size:0.72rem;color:#22c55e;margin-top:0.15rem;">${delta}</div>` : ''}
+                </div>`;
+
+            let topRow = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.75rem;margin-bottom:1rem;">';
+            topRow += topE ? mc('Emoção dominante', `${EMOTION_EMOJI[topE.type]||'🤷'} ${EMOTION_PT[topE.type]||topE.type}`, `↑ ${topE.confidence.toFixed(0)}%`) : '<div></div>';
+            topRow += face.gender ? mc('Género', `${face.gender==='Male'?'♂️':'♀️'} ${face.gender==='Male'?'Masculino':'Feminino'}`, `↑ ${(face.gender_confidence||0).toFixed(0)}%`) : '<div></div>';
+            topRow += age.low != null ? mc('Idade estimada', `${age.low}–${age.high} anos`) : '<div></div>';
+            topRow += '</div>';
+
+            const bools = [
+                ['Sorriso', face.smile, face.smile_confidence],
+                ['Olhos abertos', face.eyes_open, face.eyes_open_confidence],
+                ['Boca aberta', face.mouth_open, face.mouth_open_confidence],
+                ['Óculos', face.eyeglasses, face.eyeglasses_confidence],
+                ['Óculos de sol', face.sunglasses, face.sunglasses_confidence],
+                ['Barba', face.beard, face.beard_confidence],
+                ['Bigode', face.mustache, face.mustache_confidence],
+                ['Face ocluída', face.face_occluded, face.face_occluded_confidence],
+            ].filter(([,v]) => v !== null && v !== undefined);
+            let boolRows = '';
+            for (let i = 0; i < bools.length; i += 4) {
+                const chunk = bools.slice(i, i+4);
+                boolRows += `<div style="display:grid;grid-template-columns:repeat(${chunk.length},1fr);gap:0.5rem;margin-bottom:0.5rem;">`;
+                chunk.forEach(([lbl, val, conf]) => {
+                    boolRows += `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:0.5rem;text-align:center;">
+                        <div style="font-size:0.7rem;color:#9ca3af;">${lbl}</div>
+                        <div style="font-weight:700;color:${val?'#22c55e':'#6b7280'};margin-top:0.2rem;">${val?'Sim':'Não'}</div>
+                        <div style="font-size:0.7rem;color:#6b7280;">↑ ${(conf||0).toFixed(0)}%</div>
+                    </div>`;
+                });
+                boolRows += '</div>';
+            }
+
+            let emotionBars = '';
+            if (emotions.length > 0) {
+                emotionBars = '<div style="margin-top:0.75rem;"><div style="font-size:0.82rem;font-weight:600;color:#c7d2fe;margin-bottom:0.5rem;">Distribuição de emoções:</div>';
+                emotions.forEach(e => {
+                    emotionBars += `<div style="margin-bottom:0.4rem;">
+                        <div style="display:flex;justify-content:space-between;font-size:0.78rem;margin-bottom:0.15rem;">
+                            <span>${EMOTION_EMOJI[e.type]||'🤷'} ${EMOTION_PT[e.type]||e.type}</span>
+                            <span style="color:#9ca3af;">${e.confidence.toFixed(1)}%</span>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.08);border-radius:99px;height:6px;overflow:hidden;">
+                            <div style="width:${Math.min(100,e.confidence)}%;height:100%;background:linear-gradient(90deg,#667eea,#818cf8);border-radius:99px;"></div>
+                        </div>
+                    </div>`;
+                });
+                emotionBars += '</div>';
+            }
+
+            return `<details open style="margin:0.75rem 0;">
+                <summary style="cursor:pointer;user-select:none;padding:0.6rem 0.85rem;background:rgba(102,126,234,0.08);border:1px solid rgba(102,126,234,0.2);border-radius:8px;font-size:0.88rem;font-weight:600;color:#c7d2fe;list-style:none;display:flex;align-items:center;gap:0.5rem;">
+                    <span style="font-size:0.65rem;">▼</span> ${title}
+                </summary>
+                <div style="padding:1rem;border:1px solid rgba(255,255,255,0.08);border-top:none;border-radius:0 0 8px 8px;background:rgba(255,255,255,0.02);">
+                    ${topRow}${boolRows}${emotionBars}
+                </div>
+            </details>`;
+        }
+
+        async function doRegister(imageBlob, livenessData) {
+            const name = sanitizeName(document.getElementById('person-name').value);
+            if (!name) { alert('Insere um nome válido.'); return; }
+
+            setLoading(true);
+            document.getElementById('result-area').style.display = 'none';
+
+            try {
+                // Check duplicate
+                const listRes = await fetch('/api/aws/register/list').then(r=>r.json());
+                const existing = (listRes.faces||[]).map(f=>f.name);
+                if (existing.includes(name)) {
+                    setLoading(false);
+                    document.getElementById('result-area').style.display = 'block';
+                    document.getElementById('liveness-confirm-card').style.display = 'none';
+                    document.getElementById('face-attrs-area').innerHTML = '';
+                    document.getElementById('register-result').innerHTML = `<div class="result-box show result-warning"><div class="result-title">⚠️ Já registado</div><div class="result-details">'${name}' já está registado na coleção. Apaga primeiro ou usa outro nome.</div></div>`;
+                    return;
+                }
+
+                // Detect attributes
+                const fdDet = new FormData();
+                fdDet.append('file', imageBlob, 'face.jpg');
+                const det = await fetch('/api/aws/detect', {method:'POST',body:fdDet}).then(r=>r.json());
+
+                document.getElementById('result-area').style.display = 'block';
+
+                if (livenessData) {
+                    document.getElementById('liveness-confirm-card').style.display = 'block';
+                    document.getElementById('liveness-confirm-text').textContent =
+                        `Confiança: ${(livenessData.confidence||0).toFixed(1)}% | Threshold: ${livenessData.threshold||75}% | Amazon Rekognition Face Liveness`;
+                } else {
+                    document.getElementById('liveness-confirm-card').style.display = 'none';
+                }
+
+                if (det.face_count === 0) {
+                    setLoading(false);
+                    document.getElementById('face-attrs-area').innerHTML = '';
+                    document.getElementById('register-result').innerHTML = `<div class="result-box show result-error"><div class="result-title">❌ Nenhuma face detetada</div><div class="result-details">Tenta com uma imagem mais clara, com face visível.</div></div>`;
+                    return;
+                }
+                if (det.face_count > 1) {
+                    document.getElementById('face-attrs-area').innerHTML = `<div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:6px;padding:0.5rem 0.85rem;font-size:0.82rem;color:#fbbf24;margin-bottom:0.5rem;">⚠️ ${det.face_count} faces detetadas. Será usada a principal.</div>` + renderFaceAttrs(det.faces[0], 'Atributos da Face Registada');
+                } else {
+                    document.getElementById('face-attrs-area').innerHTML = renderFaceAttrs(det.faces[0], 'Atributos da Face Registada');
+                }
+
+                // Register
+                const fd = new FormData();
+                fd.append('name', name);
+                fd.append('file', imageBlob, 'face.jpg');
+                const res = await fetch('/api/aws/register', {method:'POST',body:fd});
+                const data = await res.json();
+                setLoading(false);
+
+                if (data.success) {
+                    document.getElementById('register-result').innerHTML = `
+                        <div class="result-box show result-success">
+                            <div class="result-title">✅ Face Registada com Sucesso — ${name}</div>
+                            <div class="result-details">Face ID: ${(data.face_id||'').substring(0,12)}... | Confiança: ${(data.confidence||0).toFixed(1)}% | Latência: ${(data.latency_ms||0).toFixed(0)}ms</div>
+                        </div>`;
+                    loadCollection();
+                } else {
+                    document.getElementById('register-result').innerHTML = `<div class="result-box show result-error"><div class="result-title">❌ Erro no Registo</div><div class="result-details">${data.detail||'Face não foi indexada na coleção'}</div></div>`;
+                }
+            } catch(e) {
+                setLoading(false);
+                document.getElementById('result-area').style.display = 'block';
+                document.getElementById('register-result').innerHTML = `<div class="result-box show result-error"><div class="result-title">❌ Erro</div><div class="result-details">${e.message}</div></div>`;
+            }
+        }
+
+        async function doRegisterUpload() {
+            if (!uploadBlob) return;
+            await doRegister(uploadBlob, null);
+        }
+
+        async function doRegisterLiveness() {
+            if (!livenessSessionId) return;
+            document.getElementById('btn-confirm').disabled = true;
+            setLoading(true);
+            try {
+                let liveness = null, attempts = 0;
+                while (attempts < 15) {
+                    const r = await fetch(`/api/aws/liveness/result/${livenessSessionId}`);
+                    liveness = await r.json();
+                    if (liveness.status !== 'IN_PROGRESS') break;
+                    await new Promise(r => setTimeout(r, 2000)); attempts++;
+                }
+                if (!liveness || liveness.status === 'IN_PROGRESS') {
+                    setLoading(false);
+                    document.getElementById('btn-confirm').disabled = false;
+                    document.getElementById('result-area').style.display = 'block';
+                    document.getElementById('liveness-confirm-card').style.display = 'none';
+                    document.getElementById('face-attrs-area').innerHTML = '';
+                    document.getElementById('register-result').innerHTML = `<div class="result-box show result-warning"><div class="result-title">⏳ Timeout</div><div class="result-details">O desafio demorou demasiado. Clica em 'Novo Desafio'.</div></div>`;
+                    return;
+                }
+                if (!liveness.isLive) {
+                    setLoading(false);
+                    document.getElementById('result-area').style.display = 'block';
+                    document.getElementById('liveness-confirm-card').style.display = 'none';
+                    document.getElementById('face-attrs-area').innerHTML = '';
+                    document.getElementById('register-result').innerHTML = `<div class="result-box show result-error"><div class="result-title">🚫 SPOOF DETETADO — Registo Negado</div><div class="result-details">Confiança: ${(liveness.confidence||0).toFixed(1)}% (mínimo: ${liveness.threshold||75}%) | Status: ${liveness.status}</div></div>`;
+                    livenessSessionId = null;
+                    resetLiveness(); return;
+                }
+                // Got live image
+                const ref_b64 = liveness.reference_image;
+                if (!ref_b64) {
+                    setLoading(false);
+                    document.getElementById('btn-confirm').disabled = false;
+                    alert('⚠️ Imagem de referência não disponível. Tenta novamente.');
+                    return;
+                }
+                // Show captured image
+                document.getElementById('liveness-frame').style.display = 'none';
+                document.getElementById('liveness-captured').src = `data:image/jpeg;base64,${ref_b64}`;
+                document.getElementById('liveness-captured').style.display = 'block';
+                document.getElementById('liveness-status').innerHTML = `<span style="color:#22c55e;">✅ Liveness confirmado (${(liveness.confidence||0).toFixed(1)}%)</span>`;
+
+                const byteStr = atob(ref_b64);
+                const ab = new ArrayBuffer(byteStr.length);
+                const ia = new Uint8Array(ab);
+                for (let i=0;i<byteStr.length;i++) ia[i]=byteStr.charCodeAt(i);
+                const blob = new Blob([ab], {type:'image/jpeg'});
+
+                livenessSessionId = null;
+                await doRegister(blob, liveness);
+            } catch(e) {
+                setLoading(false);
+                document.getElementById('btn-confirm').disabled = false;
+                document.getElementById('result-area').style.display = 'block';
+                document.getElementById('register-result').innerHTML = `<div class="result-box show result-error"><div class="result-title">❌ Erro</div><div class="result-details">${e.message}</div></div>`;
+            }
+        }
+
+        function setLoading(active) {
+            document.querySelector('.loading').classList.toggle('show', active);
+        }
+
+        async function loadCollection() {
+            document.getElementById('collection-loading').style.display = 'block';
+            document.getElementById('collection-empty').style.display = 'none';
+            document.getElementById('collection-list').innerHTML = '';
+            try {
+                const res = await fetch('/api/aws/register/list').then(r=>r.json());
+                currentFaces = res.faces || [];
+                document.getElementById('collection-loading').style.display = 'none';
+                document.getElementById('delete-all-count').textContent = `todas as ${currentFaces.length}`;
+                if (currentFaces.length === 0) {
+                    document.getElementById('collection-empty').style.display = 'block';
+                    return;
+                }
+                const cid = res.collection_id || '';
+                const list = document.getElementById('collection-list');
+                list.innerHTML = `<p style="font-size:0.85rem;color:#9ca3af;margin-bottom:0.75rem;"><strong style="color:#e2e8f0;">${currentFaces.length} face(s)</strong> registada(s)${cid?' na coleção <code style="color:#818cf8;background:rgba(102,126,234,0.1);padding:0.1rem 0.4rem;border-radius:4px;">'+cid+'</code>':''}</p>`;
+                currentFaces.forEach(f => {
+                    const div = document.createElement('div');
+                    div.id = `face-row-${f.face_id}`;
+                    div.className = 'face-row';
+                    div.innerHTML = `
+                        <div class="face-info">
+                            👤 <strong>${f.name}</strong>
+                            &nbsp;<span class="face-id-text">Face ID: ${(f.face_id||'').substring(0,20)}...</span>
+                            &nbsp;Confiança: ${f.confidence}%
+                        </div>
+                        <div>
+                            <button onclick="confirmDeleteFace('${f.face_id}','${f.name}')" class="btn" style="font-size:0.78rem;padding:0.25rem 0.5rem;color:#f87171;">🗑️ Remover</button>
+                        </div>`;
+                    list.appendChild(div);
+                    // confirm div (hidden)
+                    const conf = document.createElement('div');
+                    conf.id = `confirm-${f.face_id}`;
+                    conf.style.display = 'none';
+                    conf.className = 'confirm-overlay';
+                    conf.innerHTML = `⚠️ Tens a certeza que queres apagar <strong>${f.name}</strong>?
+                        <div style="display:flex;gap:0.5rem;margin-top:0.5rem;">
+                            <button class="btn btn-primary" style="font-size:0.78rem;padding:0.25rem 0.5rem;background:#f87171;border-color:#f87171;" onclick="doDeleteFace('${f.face_id}','${f.name}')">✅ Sim</button>
+                            <button class="btn" style="font-size:0.78rem;padding:0.25rem 0.5rem;" onclick="document.getElementById('confirm-${f.face_id}').style.display='none'">❌ Não</button>
+                        </div>`;
+                    list.appendChild(conf);
+                });
+            } catch(e) {
+                document.getElementById('collection-loading').textContent = `Erro: ${e.message}`;
+            }
+        }
+
+        function confirmDeleteFace(faceId, name) {
+            document.querySelectorAll('[id^="confirm-"]').forEach(el => el.style.display = 'none');
+            document.getElementById(`confirm-${faceId}`).style.display = 'block';
+        }
+
+        async function doDeleteFace(faceId, name) {
+            try {
+                const res = await fetch(`/api/aws/register/${encodeURIComponent(name)}`, {method:'DELETE'});
+                const data = await res.json();
+                if (data.success) {
+                    loadCollection();
+                } else {
+                    alert(data.detail || 'Erro ao remover');
+                }
+            } catch(e) { alert(e.message); }
+        }
+
+        function confirmDeleteAll() {
+            document.getElementById('confirm-delete-all').style.display = 'block';
+        }
+
+        async function doDeleteAll() {
+            document.getElementById('confirm-delete-all').style.display = 'none';
+            try {
+                // Delete each person by name (unique names)
+                const names = [...new Set(currentFaces.map(f => f.name))];
+                for (const name of names) {
+                    await fetch(`/api/aws/register/${encodeURIComponent(name)}`, {method:'DELETE'});
+                }
+                loadCollection();
+            } catch(e) { alert(e.message); }
+        }
+
+        loadCollection();
+    </script>
+</body>
+</html>

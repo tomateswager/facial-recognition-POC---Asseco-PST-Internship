@@ -1,0 +1,30 @@
+# Ambiente virtual Python
+venv/
+
+# Credenciais e variáveis de ambiente
+.env
+
+# Cache Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Dados biométricos e imagens temporárias
+database/faces/
+database/documents/
+temp/
+
+# Modelos de ML (ficheiros grandes)
+frontend/models/*.bin
+frontend/models/*.onnx
+frontend/models/*.tflite
+*.weights
+*.h5
+
+# IDEs
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

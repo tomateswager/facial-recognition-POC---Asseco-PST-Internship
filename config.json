@@ -1,0 +1,10 @@
+{
+  "verify_threshold": 95.0,
+  "identify_threshold": 80.0,
+  "liveness_threshold": 75.0,
+  "df_verify_threshold": 0.56,
+  "df_identify_threshold": 0.56,
+  "df_document_threshold": 0.68,
+  "df_quality_min_blur": 30.0,
+  "df_quality_min_face_size": 50
+}

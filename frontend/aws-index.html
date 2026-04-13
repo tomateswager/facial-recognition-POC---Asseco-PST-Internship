@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AWS POC - Dashboard</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="/js/nav.js"></script>
+</head>
+<body>
+    <nav class="navbar">
+        <div style="display:flex;align-items:center;gap:0.75rem;">
+            <a href="/aws" class="navbar-brand">☁️ AWS POC</a>
+            <div style="display:flex;background:rgba(255,255,255,0.12);border-radius:8px;padding:3px;gap:3px;">
+                <a href="/" style="padding:0.25rem 0.65rem;border-radius:6px;color:rgba(255,255,255,0.85);font-size:0.8rem;font-weight:500;text-decoration:none;">DeepFace POC</a>
+                <a href="/aws" style="padding:0.25rem 0.65rem;border-radius:6px;background:rgba(255,255,255,0.9);color:#1e293b;font-size:0.8rem;font-weight:600;text-decoration:none;">AWS POC</a>
+            </div>
+        </div>
+        <ul class="navbar-nav">
+            <li><a href="/aws/register">Registo</a></li>
+            <li><a href="/aws/verify">1:1</a></li>
+            <li><a href="/aws/identify">1:N</a></li>
+            <li><a href="/aws/multi">Multi-Pessoa</a></li>
+            <li><a href="/compare">Comparar Motores</a></li>
+            <li><a href="/aws/stats">Estatísticas</a></li>
+            <li><a href="/aws/config">Configuração</a></li>
+        </ul>
+    </nav>
+
+    <div class="container">
+
+        <!-- Hero -->
+        <div class="dashboard-hero">
+            <div class="hero-title">Reconhecimento Facial</div>
+            <div class="hero-subtitle">Prova de Conceito AWS Rekognition — Asseco PST</div>
+        </div>
+
+        <!-- Feature Cards -->
+        <div class="dashboard-grid">
+            <a href="/aws/register" class="dash-card">
+                <div class="dash-icon">📝</div>
+                <div class="dash-title">Registo Biométrico</div>
+                <div class="dash-desc">Indexar rostos na coleção AWS Rekognition</div>
+            </a>
+            <a href="/aws/verify" class="dash-card">
+                <div class="dash-icon">🔍</div>
+                <div class="dash-title">Verificação 1:1</div>
+                <div class="dash-desc">Comparar dois rostos com CompareFaces</div>
+            </a>
+            <a href="/aws/identify" class="dash-card">
+                <div class="dash-icon">🎯</div>
+                <div class="dash-title">Identificação 1:N</div>
+                <div class="dash-desc">Pesquisar rosto na coleção com SearchFacesByImage</div>
+            </a>
+            <a href="/aws/stats" class="dash-card">
+                <div class="dash-icon">📊</div>
+                <div class="dash-title">Estatísticas</div>
+                <div class="dash-desc">Latência, confiança e métricas de desempenho</div>
+            </a>
+            <a href="/aws/config" class="dash-card">
+                <div class="dash-icon">⚙️</div>
+                <div class="dash-title">Configuração</div>
+                <div class="dash-desc">Thresholds de similaridade e liveness</div>
+            </a>
+        </div>
+
+        <!-- System Stats -->
+        <div id="stat-grid-wrapper" class="stat-grid" style="display:none;">
+            <div class="stat-card">
+                <div class="stat-label">Coleção</div>
+                <div class="stat-value" id="stat-collection">—</div>
+                <div class="stat-sub" id="stat-region"></div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Rostos Indexados</div>
+                <div class="stat-value" id="stat-faces">—</div>
+                <div class="stat-sub">na coleção atual</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Threshold 1:1</div>
+                <div class="stat-value" id="stat-verify-threshold">—</div>
+                <div class="stat-sub">similaridade mínima</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Threshold 1:N</div>
+                <div class="stat-value" id="stat-identify-threshold">—</div>
+                <div class="stat-sub">similaridade mínima</div>
+            </div>
+        </div>
+
+        <!-- Config details -->
+        <div class="card">
+            <div class="card-title">☁️ Configuração AWS</div>
+            <div id="system-info" class="result-details">A carregar...</div>
+        </div>
+
+        <!-- Registered People -->
+        <div class="card">
+            <div class="card-title">👥 Rostos Registados</div>
+            <div id="people-list">A carregar...</div>
+        </div>
+    </div>
+
+    <script>
+        async function loadSystemInfo() {
+            try {
+                const res = await fetch('/api/aws/config');
+                const data = await res.json();
+
+                document.getElementById('stat-collection').textContent = data.collection_id || '—';
+                document.getElementById('stat-region').textContent = data.region || '';
+                document.getElementById('stat-verify-threshold').textContent = (data.verify_threshold ?? '—') + '%';
+                document.getElementById('stat-identify-threshold').textContent = (data.identify_threshold ?? '—') + '%';
+                document.getElementById('stat-grid-wrapper').style.display = '';
+
+                const livenessStatus = data.liveness_server_ok
+                    ? '<span style="color:var(--success);">✔ Online</span>'
+                    : '<span style="color:var(--warning);">✖ Offline</span>';
+
+                document.getElementById('system-info').innerHTML = `
+                    <strong>Coleção:</strong> ${data.collection_id}<br>
+                    <strong>Região AWS:</strong> ${data.region}<br>
+                    <strong>Threshold Verificação 1:1:</strong> ${data.verify_threshold}%<br>
+                    <strong>Threshold Identificação 1:N:</strong> ${data.identify_threshold}%<br>
+                    <strong>Threshold Liveness:</strong> ${data.liveness_threshold}%<br>
+                    <strong>Servidor Liveness:</strong> ${livenessStatus}
+                `;
+            } catch (e) {
+                document.getElementById('system-info').textContent = 'Erro ao carregar configuração AWS.';
+            }
+        }
+
+        async function loadFaces() {
+            try {
+                const res = await fetch('/api/aws/register/list');
+                const data = await res.json();
+                const el = document.getElementById('people-list');
+
+                if (!data.faces || data.faces.length === 0) {
+                    document.getElementById('stat-faces').textContent = '0';
+                    el.innerHTML = '<p style="color:var(--gray-500);">Nenhum rosto registado. <a href="/aws/register">Registar agora →</a></p>';
+                    return;
+                }
+
+                document.getElementById('stat-faces').textContent = data.faces.length;
+
+                el.innerHTML = '<ul class="people-list">' +
+                    data.faces.map(f => `
+                        <li class="people-item">
+                            <span class="people-name">👤 ${f.name || f.face_id}</span>
+                            <span class="people-count" style="font-size:0.75rem;color:var(--gray-400);">${f.face_id}</span>
+                        </li>
+                    `).join('') + '</ul>';
+            } catch (e) {
+                document.getElementById('people-list').textContent = 'Erro ao carregar lista.';
+            }
+        }
+
+        loadSystemInfo();
+        loadFaces();
+    </script>
+</body>
+</html>

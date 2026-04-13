@@ -1,0 +1,344 @@
+﻿<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verificação 1:1 - DeepFace POC</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <!-- Importante: Carregar Face-API e Smart Camera -->
+    <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <script src="/js/smart-camera.js"></script>
+    <script src="/js/nav.js"></script>
+    <style>
+        .attr-panel{margin-top:.75rem;border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+        .attr-toggle{width:100%;background:rgba(255,255,255,.06);border:none;padding:.55rem 1rem;text-align:left;cursor:pointer;color:var(--text);font-size:.85rem;font-weight:600;display:flex;justify-content:space-between;align-items:center;}
+        .attr-toggle:hover{background:rgba(255,255,255,.12);}
+        .attr-body{padding:.75rem 1rem;border-top:1px solid var(--border);}
+        .emo-bar-bg{flex:1;background:rgba(255,255,255,.1);border-radius:4px;height:7px;}
+        .emo-bar-fill{height:7px;border-radius:4px;background:var(--primary);transition:width .5s;}
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div style="display:flex;align-items:center;gap:0.75rem;">
+            <a href="/" class="navbar-brand">🔐 DeepFace POC</a>
+            <div style="display:flex;background:rgba(255,255,255,0.12);border-radius:8px;padding:3px;gap:3px;">
+                <a href="/" style="padding:0.25rem 0.65rem;border-radius:6px;background:rgba(255,255,255,0.9);color:#1e293b;font-size:0.8rem;font-weight:600;text-decoration:none;">DeepFace POC</a>
+                <a href="/aws" style="padding:0.25rem 0.65rem;border-radius:6px;color:rgba(255,255,255,0.85);font-size:0.8rem;font-weight:500;text-decoration:none;">AWS POC</a>
+            </div>
+        </div>
+        <ul class="navbar-nav">
+            <li><a href="/register">Registo</a></li>
+            <li><a href="/verify" class="active">1:1</a></li>
+            <li><a href="/identify">1:N</a></li>
+            <li><a href="/multi">Multi-Pessoa</a></li>
+            <li><a href="/video">Pesquisa Vídeo</a></li>
+            <li><a href="/live">Câmara Live</a></li>
+            <li><a href="/compare">Comparar Motores</a></li>
+            <li><a href="/models">Modelos</a></li>
+            <li><a href="/document">Documento ID</a></li>
+            <li><a href="/deepface/config">Configuração</a></li>
+        </ul>
+    </nav>
+
+    <div class="container">
+        <h1 class="page-title">🔍 Verificação 1:1</h1>
+        <p class="page-subtitle">Compare uma foto de referência com uma captura ao vivo</p>
+
+        <div class="info-box" style="align-items:flex-start;">
+            <span>ℹ️</span>
+            <div>
+                <strong>Como funciona:</strong><br>
+                1. Carregue a <strong>Foto de Referência</strong> (sem validação).<br>
+                2. Use a <strong>Câmara Inteligente</strong> para capturar o rosto ao vivo.<br>
+                3. O sistema só captura quando o rosto estiver dentro da oval e estável.
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">Comparação Facial</div>
+            <div class="image-grid">
+                
+                <!-- LADO 1: FOTO DE REFERÊNCIA (Upload) -->
+                <div id="container-1">
+                    <div class="image-box">
+                        <div class="image-label">1. Referência (Ficheiro)</div>
+                        <div class="placeholder" style="display:flex;flex-direction:column;align-items:center;">
+                            <div style="font-size:2rem;margin-bottom:0.5rem;">📁</div>
+                            <p style="color:var(--gray-500);font-size:0.85rem;">Carregue a foto original</p>
+                        </div>
+                        <img class="preview-img" style="display:none;">
+                        <input type="file" accept="image/*" style="display:none;" onchange="handleFileUpload(this, 1)">
+                        
+                        <div class="btn-group">
+                            <button class="btn btn-file" onclick="triggerFile(1)">📁 Carregar Foto</button>
+                            <button class="btn btn-clear" style="display:none;" onclick="clearImage(1)">✕ Remover</button>
+                        </div>
+                        <div id="quality-indicator-1" style="text-align:center;font-size:0.8rem;min-height:1.2rem;margin-top:0.3rem;"></div>
+                    </div>
+                </div>
+
+                <!-- LADO 2: CÂMARA AO VIVO (Smart Camera) -->
+                <div id="container-2">
+                    <div class="image-box">
+                        <div class="image-label">2. Validação (Ao Vivo)</div>
+                        <div class="placeholder" style="display:flex;flex-direction:column;align-items:center;">
+                            <div style="font-size:2rem;margin-bottom:0.5rem;">🤳</div>
+                            <p style="color:var(--gray-500);font-size:0.85rem;">Câmara Inteligente</p>
+                        </div>
+                        
+                        <!-- Elementos da Smart Camera -->
+                        <video style="display:none;" autoplay playsinline muted></video>
+                        <canvas style="position:absolute;top:0;left:0;"></canvas>
+                        <img class="preview-img" style="display:none;">
+                        
+                        <!-- Input file escondido para testes manuais se necessário -->
+                        <input type="file" accept="image/*" style="display:none;" onchange="handleFileUpload(this, 2)">
+
+                        <div class="btn-group">
+                            <button class="btn btn-camera" onclick="startSmartCamera()">📷 Iniciar Câmara</button>
+                            <button class="btn btn-file" onclick="triggerFile(2)">📁 Teste (Ficheiro)</button>
+                            <button class="btn btn-clear" style="display:none;" onclick="clearImage(2)">✕ Tentar Novamente</button>
+                        </div>
+                        <div id="quality-indicator-2" style="text-align:center;font-size:0.8rem;min-height:1.2rem;margin-top:0.3rem;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="status-indicator" style="text-align:center;margin-top:1rem;font-weight:bold;color:var(--gray-500);">
+                A aguardar imagens...
+            </div>
+
+            <div style="text-align:center;margin-top:1.5rem;">
+                <button id="btn-verify" class="btn btn-primary btn-lg" onclick="doVerify()" disabled>
+                    🔍 Verificar Identidade
+                </button>
+            </div>
+        </div>
+
+        <div class="loading">
+            <div class="spinner"></div>
+            <div class="loading-text">A analisar biometria...</div>
+        </div>
+
+        <div id="result" class="result-box"></div>
+    </div>
+
+    <script>
+        let blob1 = null, blob2 = null, mode2 = 'file', smartCam = null;
+        let quality1 = null, quality2 = null;
+
+        async function checkQuality(blob, side) {
+            const indicator = document.getElementById(`quality-indicator-${side}`);
+            indicator.innerHTML = '<span style="color:#ccc;">🔍 A verificar qualidade...</span>';
+            if (side === 1) quality1 = null; else quality2 = null;
+            checkReady();
+            const fd = new FormData();
+            fd.append('image', blob, 'image.jpg');
+            try {
+                const res = await fetch('/api/quality/assess', { method: 'POST', body: fd });
+                const data = await res.json();
+                if (data.overall_passed) {
+                    indicator.innerHTML = '<span style="color:green;">✅ Qualidade aprovada</span>';
+                    if (side === 1) quality1 = true; else quality2 = true;
+                } else {
+                    const issues = (data.checks || []).filter(c => !c.passed).map(c => c.message).join('; ');
+                    indicator.innerHTML = `<span style="color:#fff;">❌ ${issues}</span>`;
+                    if (side === 1) quality1 = false; else quality2 = false;
+                    setTimeout(() => clearImage(side), 3000);
+                }
+            } catch (_) {
+                indicator.innerHTML = '';
+                if (side === 1) quality1 = true; else quality2 = true;
+            }
+            checkReady();
+        }
+
+        function triggerFile(side) { document.querySelector(`#container-${side} input[type="file"]`).click(); }
+
+        function handleFileUpload(input, side) {
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                const container = document.getElementById(`container-${side}`);
+                const img = container.querySelector('.preview-img');
+                img.src = URL.createObjectURL(file); img.style.display = 'block';
+                container.querySelector('.placeholder').style.display = 'none';
+                if (side === 2) {
+                    container.querySelector('.btn-camera').style.display = 'none';
+                    container.querySelector('.btn-file').style.display = 'none';
+                    container.querySelector('video').style.display = 'none';
+                } else {
+                    container.querySelector('.btn-file').style.display = 'none';
+                }
+                container.querySelector('.btn-clear').style.display = 'inline-flex';
+                if (side === 1) blob1 = file;
+                if (side === 2) { blob2 = file; mode2 = 'file'; }
+                checkQuality(file, side);
+            }
+        }
+
+        async function startSmartCamera() {
+            const container = document.getElementById('container-2');
+            container.querySelector('.placeholder').style.display = 'none';
+            container.querySelector('.btn-camera').style.display = 'none';
+            container.querySelector('.btn-file').style.display = 'none';
+            container.querySelector('.preview-img').style.display = 'none';
+            if (!smartCam) {
+                smartCam = new SmartCamera('container-2', {
+                    onCapture: (blob) => {
+                        blob2 = blob; mode2 = 'camera';
+                        const img = container.querySelector('.preview-img');
+                        img.src = URL.createObjectURL(blob); img.style.display = 'block';
+                        container.querySelector('.btn-clear').style.display = 'inline-flex';
+                        checkQuality(blob, 2);
+                    }
+                });
+            }
+            await smartCam.start();
+        }
+
+        function clearImage(side) {
+            const container = document.getElementById(`container-${side}`);
+            container.querySelector('.preview-img').style.display = 'none';
+            container.querySelector('.preview-img').src = '';
+            container.querySelector('.placeholder').style.display = 'flex';
+            container.querySelector('.btn-clear').style.display = 'none';
+            if (side === 1) {
+                container.querySelector('.btn-file').style.display = 'inline-flex';
+                container.querySelector('input').value = '';
+                blob1 = null; quality1 = null;
+            } else {
+                if (smartCam) smartCam.stop();
+                container.querySelector('.btn-camera').style.display = 'inline-flex';
+                container.querySelector('.btn-file').style.display = 'inline-flex';
+                container.querySelector('video').style.display = 'none';
+                container.querySelector('input').value = '';
+                blob2 = null; mode2 = 'file'; quality2 = null;
+            }
+            document.getElementById(`quality-indicator-${side}`).innerHTML = '';
+            checkReady();
+            document.getElementById('result').className = 'result-box';
+            document.getElementById('result').innerHTML = '';
+        }
+
+        function checkReady() {
+            const btn = document.getElementById('btn-verify');
+            const status = document.getElementById('status-indicator');
+            const bothLoaded = blob1 && blob2;
+            const checking = (blob1 && quality1 === null) || (blob2 && quality2 === null);
+            const bothPassed = quality1 === true && quality2 === true;
+            if (bothLoaded && bothPassed) {
+                btn.disabled = false;
+                const modeText = mode2 === 'camera' ? 'Câmara (Ao vivo)' : 'Ficheiro';
+                status.innerHTML = `Pronto para verificar!<br><span style="font-size:0.8rem;color:${mode2==='camera'?'green':'orange'}">${modeText}</span><span style="font-size:0.8rem;color:#667eea"> · 🤖 DeepFace</span>`;
+            } else {
+                btn.disabled = true;
+                if (checking) status.textContent = '🔍 A verificar qualidade das imagens...';
+                else if (quality1 === false || quality2 === false) status.textContent = '⚠️ Corrija a imagem com qualidade insuficiente.';
+                else status.textContent = 'Carregue a imagem de referência e capture o rosto ao vivo.';
+            }
+        }
+
+        async function doVerify() {
+            if (!blob1 || !blob2) return;
+            setLoading(true);
+            const formData = new FormData();
+            formData.append('image1', blob1, 'reference.jpg');
+            formData.append('image2', blob2, 'live.jpg');
+            formData.append('mode', mode2);
+            const fdAttr = new FormData();
+            fdAttr.append('image', blob2, 'live.jpg');
+            try {
+                const [res, attrRes] = await Promise.all([
+                    fetch('/api/verify/', { method: 'POST', body: formData }),
+                    fetch('/api/attributes/', { method: 'POST', body: fdAttr }).catch(() => null),
+                ]);
+                const data = await res.json();
+                const attrs = attrRes ? await attrRes.json().catch(() => null) : null;
+                setLoading(false);
+                if (data.spoof_detected) {
+                    showResult('error', '🚨 Spoofing Detetado!', `${data.message}<br><br>O sistema detetou que a imagem ao vivo não é um rosto real.`);
+                } else if (data.success) {
+                    const type = data.verified ? 'success' : 'error';
+                    const warn = data.anti_spoofing_warning ? `<br><small style="color:var(--warning);">${data.anti_spoofing_warning}</small>` : '';
+                    showResult(type, `${data.verified ? '✅' : '❌'} ${data.message}`, `
+                        <strong>Resultado:</strong> ${data.verified ? 'MESMA PESSOA' : 'PESSOAS DIFERENTES'}<br>
+                        <strong>Distância:</strong> ${data.distance} (Limiar: ${data.threshold})<br>
+                        <strong>Anti-Spoofing:</strong> ${data.anti_spoofing ? 'Ativo ✅' : 'Desativado ⚠️'}${warn}
+                        ${renderAttrPanel(attrs, 'verify')}
+                    `);
+                } else { showResult('warning', '⚠️ Erro', data.message); }
+            } catch (e) { setLoading(false); showResult('error', '❌ Erro', e.message); }
+        }
+
+        function showResult(type, title, html) {
+            const box = document.getElementById('result');
+            box.className = `result-box show result-${type}`;
+            box.innerHTML = `<div class="result-title">${title}</div><div class="result-details">${html}</div>`;
+        }
+        function setLoading(active) {
+            document.querySelector('.loading').classList.toggle('show', active);
+            document.getElementById('btn-verify').disabled = active;
+        }
+
+        const EMOTION_PT = {happy:'Feliz',sad:'Triste',angry:'Raiva',fear:'Medo',surprise:'Surpreso',surprised:'Surpreso',disgust:'Nojo',disgusted:'Nojo',neutral:'Neutro',calm:'Calmo',confused:'Confuso'};
+        const RACE_PT = {'asian':'Asiático','indian':'Indiano','black':'Negro','white':'Caucasiano','middle eastern':'Médio Oriente','latino hispanic':'Latino'};
+        function renderAttrPanel(attrs, uid, label) {
+            if (!attrs || !attrs.success) return '';
+            const emoji = attrs.emotion_emoji || '😐';
+            const emName = EMOTION_PT[attrs.dominant_emotion] || attrs.dominant_emotion || 'Neutro';
+            const ageStr = attrs.age_range
+                ? `${attrs.age_range.low}–${attrs.age_range.high} anos`
+                : (attrs.age != null ? `~${attrs.age} anos` : '');
+            const gender = attrs.gender === 'Man' || attrs.gender === 'Male' ? '👨 Masculino'
+                         : attrs.gender === 'Woman' || attrs.gender === 'Female' ? '👩 Feminino' : (attrs.gender || '');
+            const genderConf = attrs.gender_confidence ? ` (${attrs.gender_confidence}%)` : '';
+            const emBars = (attrs.emotions || []).map(e => {
+                const n = EMOTION_PT[e.name] || e.name || '';
+                const c = Math.round(e.confidence || 0);
+                return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+                    <span style="width:72px;font-size:.75rem;color:#94a3b8;">${n}</span>
+                    <div class="emo-bar-bg"><div class="emo-bar-fill" style="width:${c}%"></div></div>
+                    <span style="width:32px;text-align:right;font-size:.75rem;">${c}%</span></div>`;
+            }).join('');
+            const raceName = RACE_PT[attrs.dominant_race] || attrs.dominant_race || '';
+            const raceBars = (attrs.race || []).map(e => {
+                const n = RACE_PT[e.name] || e.name || '';
+                const c = Math.round(e.confidence || 0);
+                return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+                    <span style="width:108px;font-size:.75rem;color:#94a3b8;">${n}</span>
+                    <div class="emo-bar-bg"><div class="emo-bar-fill" style="width:${c}%;background:#f59e0b;"></div></div>
+                    <span style="width:32px;text-align:right;font-size:.75rem;">${c}%</span></div>`;
+            }).join('');
+            const smile = attrs.smile != null ? `<div style="font-size:.8rem;color:#94a3b8;margin-top:2px;">${attrs.smile?'😁 A sorrir':'😶 Sem sorriso'}</div>` : '';
+            const title = label || '🧠 Análise Facial';
+            return `<div class="attr-panel">
+                <button class="attr-toggle" onclick="toggleAttr('ab-${uid}')">
+                    <span>${title}</span><span id="arr-${uid}">▼</span>
+                </button>
+                <div class="attr-body" id="ab-${uid}" style="display:none">
+                    <div style="display:flex;gap:1rem;align-items:center;margin-bottom:.75rem;">
+                        <div style="font-size:2.8rem;line-height:1;">${emoji}</div>
+                        <div><div style="font-size:1rem;font-weight:700;">${emName}</div><div style="font-size:.8rem;color:#94a3b8;">Emoção dominante</div></div>
+                        <div style="margin-left:auto;text-align:right;">
+                            <div style="font-size:1rem;font-weight:700;">${ageStr}</div>
+                            <div style="font-size:.8rem;color:#94a3b8;">${gender}${genderConf}</div>${smile}
+                        </div>
+                    </div>
+                    <div style="font-size:.78rem;font-weight:600;color:#94a3b8;margin-bottom:4px;">EMOÇÕES</div>
+                    ${emBars}
+                    ${raceName ? `<div style="font-size:.78rem;font-weight:600;color:#94a3b8;margin:8px 0 4px;">ETNIA ESTIMADA · ${raceName}</div>${raceBars}` : ''}
+                </div>
+            </div>`;
+        }
+        function toggleAttr(id) {
+            const el = document.getElementById(id);
+            const arr = document.getElementById('arr-' + id.replace('ab-',''));
+            if (!el) return;
+            const open = el.style.display === 'none';
+            el.style.display = open ? 'block' : 'none';
+            if (arr) arr.textContent = open ? '▲' : '▼';
+        }
+    </script>
+</body>
+</html>

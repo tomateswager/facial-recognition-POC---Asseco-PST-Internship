@@ -1,0 +1,4 @@
+.\venv\Scripts\activate
+
+python run.py
+python run_deepface.py

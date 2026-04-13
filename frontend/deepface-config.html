@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuração - DeepFace</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .info-box {
+            background: rgba(102,126,234,0.1);
+            border-left: 4px solid #667eea;
+            border-radius: 6px;
+            padding: 0.85rem 1rem;
+            font-size: 0.88rem;
+            color: #c7d2fe;
+            margin-bottom: 1rem;
+        }
+        .metric-cards {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.75rem;
+            margin: 0.75rem 0 1.2rem;
+        }
+        .metric-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 0.75rem;
+            text-align: center;
+        }
+        .metric-card .metric-label { font-size: 0.73rem; color: #9ca3af; margin-bottom: 0.3rem; }
+        .metric-card .metric-value { font-size: 1.25rem; font-weight: 700; color: #e2e8f0; }
+        .section-title { font-size: 1.05rem; font-weight: 700; color: #e2e8f0; margin: 1.5rem 0 0.3rem; }
+        .section-caption { font-size: 0.82rem; color: #9ca3af; margin-bottom: 0.6rem; }
+        .slider-wrap { margin-bottom: 0.5rem; }
+        .slider-row { display: flex; align-items: center; gap: 0.75rem; }
+        .slider-row input[type=range] { flex: 1; accent-color: #667eea; cursor: pointer; }
+        .slider-val { min-width: 4rem; text-align: right; font-size: 1.1rem; font-weight: 700; color: #667eea; }
+        .source-note { font-size: 0.8rem; color: #6b7280; margin-top: 0.5rem; line-height: 1.5; }
+        .source-note strong { color: #9ca3af; }
+        .divider { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 1.5rem 0; }
+        .info-row { display: flex; justify-content: space-between; padding: 0.55rem 0; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 0.88rem; }
+        .info-row:last-child { border-bottom: none; }
+        .info-key { color: #9ca3af; }
+        .info-val { font-weight: 600; font-family: monospace; }
+        .toast { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%); background: #22c55e; color: white; padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 600; z-index: 9999; display: none; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+    </style>
+    <script src="/js/nav.js"></script>
+</head>
+<body>
+    <nav class="navbar">
+        <div style="display:flex;align-items:center;gap:0.75rem;">
+            <a href="/" class="navbar-brand">🔐 DeepFace POC</a>
+            <div style="display:flex;background:rgba(255,255,255,0.12);border-radius:8px;padding:3px;gap:3px;">
+                <a href="/" style="padding:0.25rem 0.65rem;border-radius:6px;background:rgba(255,255,255,0.9);color:#1e293b;font-size:0.8rem;font-weight:600;text-decoration:none;">DeepFace POC</a>
+                <a href="/aws" style="padding:0.25rem 0.65rem;border-radius:6px;color:rgba(255,255,255,0.85);font-size:0.8rem;font-weight:500;text-decoration:none;">AWS POC</a>
+            </div>
+        </div>
+        <ul class="navbar-nav">
+            <li><a href="/register">Registo</a></li>
+            <li><a href="/verify">1:1</a></li>
+            <li><a href="/identify">1:N</a></li>
+            <li><a href="/multi">Multi-Pessoa</a></li>
+            <li><a href="/video">Pesquisa Vídeo</a></li>
+            <li><a href="/live">Câmara Live</a></li>
+            <li><a href="/compare">Comparar Motores</a></li>
+            <li><a href="/models">Modelos</a></li>
+            <li><a href="/document">Documento ID</a></li>
+            <li><a href="/deepface/config" class="active">Configuração</a></li>
+        </ul>
+    </nav>
+
+    <div class="container">
+        <h1 class="page-title">⚙️ Configuração — DeepFace</h1>
+        <p class="page-subtitle">Ajusta os thresholds e parâmetros do motor DeepFace</p>
+
+        <div class="card">
+
+            <!-- ── Verification Thresholds ── -->
+            <div class="card-title">🎯 Thresholds de Distância Cosine</div>
+
+            <div class="info-box">
+                <strong>O que faz:</strong> Define a distância cosine máxima para considerar duas faces como a mesma pessoa.<br>
+                <span style="opacity:0.85;">Ao contrário da similaridade percentual, aqui <strong>valores mais baixos = mais restritivo</strong>.<br>
+                O ArcFace devolve distâncias entre 0 (idêntico) e 2 (completamente diferente). O threshold padrão AWS é 0.68 para ArcFace+Cosine.</span>
+            </div>
+
+            <div class="metric-cards">
+                <div class="metric-card">
+                    <div class="metric-label">ArcFace Default (LFW)</div>
+                    <div class="metric-value">0.68</div>
+                    <div style="font-size:0.72rem;color:#6b7280;margin-top:0.2rem;">Threshold padrão do DeepFace para ArcFace+Cosine</div>
+                </div>
+                <div class="metric-card" style="border-color:rgba(102,126,234,0.4);">
+                    <div class="metric-label">POC (recomendado)</div>
+                    <div class="metric-value" style="color:#818cf8;">0.54</div>
+                    <div style="font-size:0.72rem;color:#6b7280;margin-top:0.2rem;">Mais restritivo — menos falsos positivos neste POC</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Permissivo</div>
+                    <div class="metric-value">≥ 0.70</div>
+                    <div style="font-size:0.72rem;color:#6b7280;margin-top:0.2rem;">Aceita variações maiores de ângulo/iluminação</div>
+                </div>
+            </div>
+
+            <div class="section-title">Verificação 1:1</div>
+            <div class="section-caption">Comparação direta entre duas faces — recomendado valor mais baixo (mais restritivo)</div>
+            <div style="font-size:0.78rem;color:#818cf8;margin-bottom:0.4rem;">Usado em: <strong>Verificação 1:1</strong> · <strong>Pesquisa Vídeo (modo 1:1)</strong> · <strong>Comparar Motores</strong></div>
+            <div class="slider-wrap">
+                <div class="slider-row">
+                    <input type="range" id="slider-verify" min="0.20" max="1.00" step="0.01" oninput="updateVal('verify', this.value)">
+                    <span class="slider-val" id="val-verify">—</span>
+                </div>
+            </div>
+
+            <div class="section-title">Identificação 1:N</div>
+            <div class="section-caption">Pesquisa na base de dados — pode ser ligeiramente mais permissivo</div>
+            <div style="font-size:0.78rem;color:#818cf8;margin-bottom:0.4rem;">Usado em: <strong>Identificação 1:N</strong> · <strong>Câmara Live</strong> · <strong>Pesquisa Vídeo (modo 1:N)</strong> · <strong>Multi-Pessoa</strong></div>
+            <div class="slider-wrap">
+                <div class="slider-row">
+                    <input type="range" id="slider-identify" min="0.20" max="1.00" step="0.01" oninput="updateVal('identify', this.value)">
+                    <span class="slider-val" id="val-identify">—</span>
+                </div>
+            </div>
+
+            <div class="section-title">Documento ID vs Câmara</div>
+            <div class="section-caption">Comparação foto de documento vs câmara — mais permissivo porque as condições de foto são muito diferentes</div>
+            <div style="font-size:0.78rem;color:#818cf8;margin-bottom:0.4rem;">Usado em: <strong>Documento ID</strong> (verificação face do doc vs câmara ao vivo)</div>
+            <div class="slider-wrap">
+                <div class="slider-row">
+                    <input type="range" id="slider-document" min="0.20" max="1.00" step="0.01" oninput="updateVal('document', this.value)">
+                    <span class="slider-val" id="val-document">—</span>
+                </div>
+            </div>
+
+            <div class="source-note">
+                ⬆️ <strong>Mais alto</strong> → aceita mais variações, aumenta risco de falsos positivos<br>
+                ⬇️ <strong>Mais baixo</strong> → mais restritivo, pode rejeitar a pessoa certa em más condições de iluminação ou ângulo
+            </div>
+
+            <hr class="divider">
+
+            <!-- ── Quality Thresholds ── -->
+            <div class="card-title" style="margin-top:0;">🖼️ Thresholds de Qualidade de Imagem</div>
+
+            <div class="info-box">
+                <strong>O que faz:</strong> Define os critérios mínimos de qualidade que uma imagem deve cumprir antes de ser processada.<br>
+                <span style="opacity:0.85;">Imagens de baixa qualidade degradam a precisão do reconhecimento facial.</span>
+            </div>
+
+            <div class="section-title">Nitidez mínima (Anti-Blur)</div>
+            <div class="section-caption">Variância do Laplaciano — valores baixos indicam imagem desfocada. Mínimo recomendado: 30–80</div>
+            <div style="font-size:0.78rem;color:#818cf8;margin-bottom:0.4rem;">Usado em: <strong>Qualidade de Imagem</strong> · <strong>Verificação 1:1</strong> · <strong>Identificação 1:N</strong> · <strong>Registo</strong> · <strong>Documento ID</strong></div>
+            <div class="slider-wrap">
+                <div class="slider-row">
+                    <input type="range" id="slider-blur" min="5" max="200" step="1" oninput="updateVal('blur', this.value, '')">
+                    <span class="slider-val" id="val-blur">—</span>
+                </div>
+            </div>
+            <div class="source-note">
+                ⬆️ <strong>Mais alto</strong> → exige mais nitidez, pode rejeitar fotos razoáveis<br>
+                ⬇️ <strong>Mais baixo</strong> → aceita imagens levemente desfocadas
+            </div>
+
+            <div class="section-title" style="margin-top:1.2rem;">Tamanho mínimo da face (px)</div>
+            <div class="section-caption">Largura e altura mínimas da face detetada em pixels. Mínimo recomendado: 40–80px</div>
+            <div style="font-size:0.78rem;color:#818cf8;margin-bottom:0.4rem;">Usado em: <strong>Qualidade de Imagem</strong> · <strong>Verificação 1:1</strong> · <strong>Identificação 1:N</strong> · <strong>Registo</strong> · <strong>Documento ID</strong></div>
+            <div class="slider-wrap">
+                <div class="slider-row">
+                    <input type="range" id="slider-facesize" min="20" max="200" step="5" oninput="updateVal('facesize', this.value, 'px')">
+                    <span class="slider-val" id="val-facesize">—</span>
+                </div>
+            </div>
+            <div class="source-note">
+                ⬆️ <strong>Mais alto</strong> → exige face maior na imagem — rejeita fotos tiradas ao longe<br>
+                ⬇️ <strong>Mais baixo</strong> → aceita faces pequenas com menor qualidade de reconhecimento
+            </div>
+
+            <hr class="divider">
+
+            <!-- ── Buttons ── -->
+            <div style="display:flex;gap:0.75rem;align-items:center;">
+                <button class="btn btn-primary" onclick="saveConfig()">💾 Guardar Configuração</button>
+                <button class="btn" onclick="resetDefaults()">↩️ Restaurar Defaults</button>
+                <span style="font-size:0.8rem;color:#6b7280;margin-left:auto;">As alterações só têm efeito após clicar em 'Guardar'.</span>
+            </div>
+            <div id="save-msg" style="margin-top:0.75rem;min-height:1.2rem;font-size:0.9rem;"></div>
+        </div>
+
+        <!-- ── Info Cards ── -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
+            <div class="card">
+                <div class="card-title">🤖 Modelo Ativo</div>
+                <div class="info-row"><span class="info-key">Reconhecimento</span><span class="info-val">ArcFace</span></div>
+                <div class="info-row"><span class="info-key">Detetor</span><span class="info-val">YuNet</span></div>
+                <div class="info-row"><span class="info-key">Métrica</span><span class="info-val">Cosine Distance</span></div>
+                <div class="info-row"><span class="info-key">Precision (LFW)</span><span class="info-val" style="color:#22c55e;">99.83%</span></div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">📊 Configuração Atual</div>
+                <div class="info-row"><span class="info-key">Verificação 1:1</span><span class="info-val" id="cur-verify">—</span></div>
+                <div class="info-row"><span class="info-key">Identificação 1:N</span><span class="info-val" id="cur-identify">—</span></div>
+                <div class="info-row"><span class="info-key">Documento ID</span><span class="info-val" id="cur-document">—</span></div>
+                <div class="info-row"><span class="info-key">Anti-Blur</span><span class="info-val" id="cur-blur">—</span></div>
+                <div class="info-row"><span class="info-key">Face mín.</span><span class="info-val" id="cur-facesize">—</span></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const DEFAULTS = {
+            verify:   0.54,
+            identify: 0.54,
+            document: 0.65,
+            blur:     30,
+            facesize: 50,
+        };
+        const UNITS = { verify: '', identify: '', document: '', blur: '', facesize: 'px' };
+
+        function updateVal(key, val, unit) {
+            const u = unit !== undefined ? unit : UNITS[key];
+            const disp = (key === 'verify' || key === 'identify' || key === 'document')
+                ? parseFloat(val).toFixed(2)
+                : parseInt(val);
+            document.getElementById(`val-${key}`).textContent = `${disp}${u}`;
+        }
+
+        function showToast(msg, color = '#22c55e') {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.style.background = color;
+            t.style.display = 'block';
+            setTimeout(() => t.style.display = 'none', 3000);
+        }
+
+        async function loadConfig() {
+            try {
+                const res = await fetch('/api/deepface/config');
+                const data = await res.json();
+                setSlider('verify',   data.df_verify_threshold,      '');
+                setSlider('identify', data.df_identify_threshold,     '');
+                setSlider('document', data.df_document_threshold,     '');
+                setSlider('blur',     data.df_quality_min_blur,       '');
+                setSlider('facesize', data.df_quality_min_face_size,  'px');
+                // Current config display
+                document.getElementById('cur-verify').textContent   = data.df_verify_threshold.toFixed(2);
+                document.getElementById('cur-identify').textContent  = data.df_identify_threshold.toFixed(2);
+                document.getElementById('cur-document').textContent  = data.df_document_threshold.toFixed(2);
+                document.getElementById('cur-blur').textContent      = data.df_quality_min_blur;
+                document.getElementById('cur-facesize').textContent  = data.df_quality_min_face_size + 'px';
+            } catch(e) {
+                showToast(`Erro ao carregar: ${e.message}`, '#f87171');
+            }
+        }
+
+        function setSlider(key, val, unit) {
+            const slider = document.getElementById(`slider-${key}`);
+            slider.value = val;
+            const disp = (key === 'verify' || key === 'identify' || key === 'document')
+                ? parseFloat(val).toFixed(2)
+                : parseInt(val);
+            document.getElementById(`val-${key}`).textContent = `${disp}${unit}`;
+        }
+
+        function resetDefaults() {
+            setSlider('verify',   DEFAULTS.verify,   '');
+            setSlider('identify', DEFAULTS.identify,  '');
+            setSlider('document', DEFAULTS.document,  '');
+            setSlider('blur',     DEFAULTS.blur,      '');
+            setSlider('facesize', DEFAULTS.facesize,  'px');
+            document.getElementById('save-msg').innerHTML =
+                '<span style="color:#f59e0b;">↩️ Valores repostos para defaults — clica em Guardar para aplicar.</span>';
+        }
+
+        async function saveConfig() {
+            const body = {
+                df_verify_threshold:      parseFloat(document.getElementById('slider-verify').value),
+                df_identify_threshold:    parseFloat(document.getElementById('slider-identify').value),
+                df_document_threshold:    parseFloat(document.getElementById('slider-document').value),
+                df_quality_min_blur:      parseFloat(document.getElementById('slider-blur').value),
+                df_quality_min_face_size: parseInt(document.getElementById('slider-facesize').value),
+            };
+            try {
+                const res = await fetch('/api/deepface/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('✅ Configuração guardada com sucesso!');
+                    document.getElementById('save-msg').innerHTML =
+                        '<span style="color:#22c55e;">✅ Configuração guardada com sucesso!</span>';
+                    // Update current config display
+                    document.getElementById('cur-verify').textContent   = body.df_verify_threshold.toFixed(2);
+                    document.getElementById('cur-identify').textContent  = body.df_identify_threshold.toFixed(2);
+                    document.getElementById('cur-document').textContent  = body.df_document_threshold.toFixed(2);
+                    document.getElementById('cur-blur').textContent      = body.df_quality_min_blur;
+                    document.getElementById('cur-facesize').textContent  = body.df_quality_min_face_size + 'px';
+                } else {
+                    showToast(`Erro: ${data.detail}`, '#f87171');
+                }
+            } catch(e) {
+                showToast(`Erro: ${e.message}`, '#f87171');
+            }
+        }
+
+        loadConfig();
+    </script>
+</body>
+</html>

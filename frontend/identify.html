@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Identificação 1:N - DeepFace POC</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <!-- Face-API e Smart Camera -->
+    <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <script src="/js/smart-camera.js"></script>
+    <script src="/js/nav.js"></script>
+    <style>
+        .attr-panel{margin-top:.75rem;border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+        .attr-toggle{width:100%;background:rgba(255,255,255,.06);border:none;padding:.55rem 1rem;text-align:left;cursor:pointer;color:var(--text);font-size:.85rem;font-weight:600;display:flex;justify-content:space-between;align-items:center;}
+        .attr-toggle:hover{background:rgba(255,255,255,.12);}
+        .attr-body{padding:.75rem 1rem;border-top:1px solid var(--border);}
+        .emo-bar-bg{flex:1;background:rgba(255,255,255,.1);border-radius:4px;height:7px;}
+        .emo-bar-fill{height:7px;border-radius:4px;background:var(--primary);transition:width .5s;}
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div style="display:flex;align-items:center;gap:0.75rem;">
+            <a href="/" class="navbar-brand">🔐 DeepFace POC</a>
+            <div style="display:flex;background:rgba(255,255,255,0.12);border-radius:8px;padding:3px;gap:3px;">
+                <a href="/" style="padding:0.25rem 0.65rem;border-radius:6px;background:rgba(255,255,255,0.9);color:#1e293b;font-size:0.8rem;font-weight:600;text-decoration:none;">DeepFace POC</a>
+                <a href="/aws" style="padding:0.25rem 0.65rem;border-radius:6px;color:rgba(255,255,255,0.85);font-size:0.8rem;font-weight:500;text-decoration:none;">AWS POC</a>
+            </div>
+        </div>
+        <ul class="navbar-nav">
+            <li><a href="/register">Registo</a></li>
+            <li><a href="/verify">1:1</a></li>
+            <li><a href="/identify" class="active">1:N</a></li>
+            <li><a href="/multi">Multi-Pessoa</a></li>
+            <li><a href="/video">Pesquisa Vídeo</a></li>
+            <li><a href="/live">Câmara Live</a></li>
+            <li><a href="/compare">Comparar Motores</a></li>
+            <li><a href="/models">Modelos</a></li>
+            <li><a href="/document">Documento ID</a></li>
+            <li><a href="/deepface/config">Configuração</a></li>
+        </ul>
+    </nav>
+
+    <div class="container">
+        <h1 class="page-title">🎯 Identificação 1:N</h1>
+        <p class="page-subtitle">Quem é esta pessoa? Pesquisa na base de dados com Anti-Spoofing.</p>
+
+        <div class="card">
+            <div class="card-title">Captura para Identificação</div>
+            
+            <div id="container-identify" style="max-width:480px; margin:0 auto;">
+                <div class="image-box">
+                    <div class="placeholder" style="display:flex;flex-direction:column;align-items:center;">
+                        <div style="font-size:2.5rem;margin-bottom:0.5rem;">🎯</div>
+                        <p style="color:var(--gray-500);">Rosto a Identificar</p>
+                    </div>
+                    
+                    <!-- Elementos da Smart Camera -->
+                    <video style="display:none;" autoplay playsinline muted></video>
+                    <canvas style="position:absolute;top:0;left:0;"></canvas>
+                    <img class="preview-img" style="display:none;">
+                    
+                    <input type="file" accept="image/*" style="display:none;" onchange="handleFileUpload(this)">
+
+                    <div class="btn-group">
+                        <button class="btn btn-camera" onclick="startIdentifyCamera()">📷 Iniciar Câmara</button>
+                        <button class="btn btn-file" onclick="triggerFile()">📁 Carregar Ficheiro</button>
+                        <button class="btn btn-clear" style="display:none;" onclick="clearIdentify()">✕ Limpar</button>
+                    </div>
+                    <div id="quality-indicator" style="text-align:center;font-size:0.8rem;min-height:1.2rem;margin-top:0.3rem;"></div>
+                </div>
+            </div>
+
+            <div style="text-align:center;margin-top:1.5rem;">
+                <button id="btn-identify" class="btn btn-primary btn-lg" onclick="doIdentify()" disabled>
+                    🎯 Identificar Pessoa
+                </button>
+            </div>
+        </div>
+
+        <div class="loading">
+            <div class="spinner"></div>
+            <div class="loading-text">A pesquisar na base de dados...</div>
+        </div>
+
+        <div id="result" class="result-box"></div>
+    </div>
+
+    <script>
+        let identifyBlob = null, identifyMode = 'file', smartCam = null, qualityPassed = null;
+
+        async function checkQuality(blob) {
+            const indicator = document.getElementById('quality-indicator');
+            indicator.innerHTML = '<span style="color:#ccc;">🔍 A verificar qualidade...</span>';
+            qualityPassed = null;
+            document.getElementById('btn-identify').disabled = true;
+            const fd = new FormData();
+            fd.append('image', blob, 'image.jpg');
+            try {
+                const res = await fetch('/api/quality/assess', { method: 'POST', body: fd });
+                const data = await res.json();
+                if (data.overall_passed) {
+                    indicator.innerHTML = '<span style="color:green;">✅ Qualidade aprovada</span>';
+                    qualityPassed = true;
+                    document.getElementById('btn-identify').disabled = false;
+                } else {
+                    const issues = (data.checks || []).filter(c => !c.passed).map(c => c.message).join('; ');
+                    indicator.innerHTML = `<span style="color:#fff;">❌ ${issues}</span>`;
+                    qualityPassed = false;
+                    setTimeout(() => clearIdentify(), 3000);
+                }
+            } catch (_) {
+                indicator.innerHTML = '';
+                qualityPassed = true;
+                document.getElementById('btn-identify').disabled = false;
+            }
+        }
+
+        async function startIdentifyCamera() {
+            const container = document.getElementById('container-identify');
+            container.querySelector('.placeholder').style.display = 'none';
+            container.querySelector('.btn-camera').style.display = 'none';
+            container.querySelector('.btn-file').style.display = 'none';
+            if (!smartCam) {
+                smartCam = new SmartCamera('container-identify', {
+                    onCapture: (blob) => {
+                        identifyBlob = blob;
+                        identifyMode = 'camera';
+                        const img = container.querySelector('.preview-img');
+                        img.src = URL.createObjectURL(blob);
+                        img.style.display = 'block';
+                        container.querySelector('.btn-clear').style.display = 'inline-flex';
+                        checkQuality(blob);
+                    }
+                });
+            }
+            await smartCam.start();
+        }
+
+        function triggerFile() {
+            document.querySelector('#container-identify input').click();
+        }
+
+        function handleFileUpload(input) {
+            if (input.files && input.files[0]) {
+                identifyBlob = input.files[0];
+                identifyMode = 'file';
+                const container = document.getElementById('container-identify');
+                const img = container.querySelector('.preview-img');
+                img.src = URL.createObjectURL(identifyBlob);
+                img.style.display = 'block';
+                container.querySelector('.placeholder').style.display = 'none';
+                container.querySelector('.btn-camera').style.display = 'none';
+                container.querySelector('.btn-file').style.display = 'none';
+                container.querySelector('.btn-clear').style.display = 'inline-flex';
+                checkQuality(identifyBlob);
+            }
+        }
+
+        function clearIdentify() {
+            if (smartCam) smartCam.stop();
+            identifyBlob = null;
+            qualityPassed = null;
+            const container = document.getElementById('container-identify');
+            container.querySelector('.preview-img').style.display = 'none';
+            container.querySelector('.placeholder').style.display = 'flex';
+            container.querySelector('.btn-camera').style.display = 'inline-flex';
+            container.querySelector('.btn-file').style.display = 'inline-flex';
+            container.querySelector('.btn-clear').style.display = 'none';
+            container.querySelector('input').value = '';
+            document.getElementById('quality-indicator').innerHTML = '';
+            document.getElementById('btn-identify').disabled = true;
+            document.getElementById('result').className = 'result-box';
+            document.getElementById('result').innerHTML = '';
+        }
+
+        async function doIdentify() {
+            if (!identifyBlob) return;
+            setLoading(true);
+            const formData = new FormData();
+            formData.append('image', identifyBlob, 'identify.jpg');
+            formData.append('mode', identifyMode);
+            const fdAttr = new FormData();
+            fdAttr.append('image', identifyBlob, 'identify.jpg');
+            try {
+                const [res, attrRes] = await Promise.all([
+                    fetch('/api/identify/', { method: 'POST', body: formData }),
+                    fetch('/api/attributes/', { method: 'POST', body: fdAttr }).catch(() => null),
+                ]);
+                const data = await res.json();
+                const attrs = attrRes ? await attrRes.json().catch(() => null) : null;
+                setLoading(false);
+                if (data.spoof_detected) {
+                    showResult('error', '🚨 Spoofing Detetado!', `${data.message}<br><br>A imagem capturada não parece ser real.`);
+                } else if (data.success && data.results && data.results.length > 0) {
+                    const best = data.results[0];
+                    let html = `
+                        <strong>Identificado:</strong> <span style="font-size:1.2rem">${best.name}</span><br>
+                        <strong>Distância:</strong> ${best.distance.toFixed(4)}<br>
+                        <strong>Anti-Spoofing:</strong> ${data.anti_spoofing ? 'Ativo ✅' : 'Desativado ⚠️'}<br>
+                        ${renderAttrPanel(attrs, 'identify')}
+                    `;
+                    if (data.results.length > 1) {
+                        html += '<hr style="margin:10px 0;border:0;border-top:1px solid rgba(255,255,255,.1);"><strong>Outras possibilidades:</strong><br>';
+                        data.results.slice(1).forEach(r => { html += `<small>${r.name} (${r.distance.toFixed(4)})</small><br>`; });
+                    }
+                    showResult('success', '✅ Pessoa Encontrada', html);
+                } else if (data.success) {
+                    showResult('warning', '🔍 Desconhecido', (data.message || 'Nenhuma correspondência encontrada.') + '<br>Tem a certeza que a pessoa está registada?' + renderAttrPanel(attrs, 'identify-unknown'));
+                } else { showResult('error', '⚠️ Erro', data.message); }
+            } catch (e) { setLoading(false); showResult('error', '❌ Erro', e.message); }
+        }
+
+        function showResult(type, title, html) {
+            const box = document.getElementById('result');
+            box.className = `result-box show result-${type}`;
+            box.innerHTML = `<div class="result-title">${title}</div><div class="result-details">${html}</div>`;
+        }
+        function setLoading(active) {
+            document.querySelector('.loading').classList.toggle('show', active);
+            document.getElementById('btn-identify').disabled = active;
+        }
+
+        const EMOTION_PT = {happy:'Feliz',sad:'Triste',angry:'Raiva',fear:'Medo',surprise:'Surpreso',surprised:'Surpreso',disgust:'Nojo',disgusted:'Nojo',neutral:'Neutro',calm:'Calmo',confused:'Confuso'};
+        const RACE_PT = {'asian':'Asiático','indian':'Indiano','black':'Negro','white':'Caucasiano','middle eastern':'Médio Oriente','latino hispanic':'Latino'};
+        function renderAttrPanel(attrs, uid, label) {
+            if (!attrs || !attrs.success) return '';
+            const emoji = attrs.emotion_emoji || '😐';
+            const emName = EMOTION_PT[attrs.dominant_emotion] || attrs.dominant_emotion || 'Neutro';
+            const ageStr = attrs.age_range
+                ? `${attrs.age_range.low}–${attrs.age_range.high} anos`
+                : (attrs.age != null ? `~${attrs.age} anos` : '');
+            const gender = attrs.gender === 'Man' || attrs.gender === 'Male' ? '👨 Masculino'
+                         : attrs.gender === 'Woman' || attrs.gender === 'Female' ? '👩 Feminino' : (attrs.gender || '');
+            const genderConf = attrs.gender_confidence ? ` (${attrs.gender_confidence}%)` : '';
+            const emBars = (attrs.emotions || []).map(e => {
+                const n = EMOTION_PT[e.name] || e.name || '';
+                const c = Math.round(e.confidence || 0);
+                return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+                    <span style="width:72px;font-size:.75rem;color:#94a3b8;">${n}</span>
+                    <div class="emo-bar-bg"><div class="emo-bar-fill" style="width:${c}%"></div></div>
+                    <span style="width:32px;text-align:right;font-size:.75rem;">${c}%</span></div>`;
+            }).join('');
+            const raceName = RACE_PT[attrs.dominant_race] || attrs.dominant_race || '';
+            const raceBars = (attrs.race || []).map(e => {
+                const n = RACE_PT[e.name] || e.name || '';
+                const c = Math.round(e.confidence || 0);
+                return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+                    <span style="width:108px;font-size:.75rem;color:#94a3b8;">${n}</span>
+                    <div class="emo-bar-bg"><div class="emo-bar-fill" style="width:${c}%;background:#f59e0b;"></div></div>
+                    <span style="width:32px;text-align:right;font-size:.75rem;">${c}%</span></div>`;
+            }).join('');
+            const smile = attrs.smile != null ? `<div style="font-size:.8rem;color:#94a3b8;margin-top:2px;">${attrs.smile?'😁 A sorrir':'😶 Sem sorriso'}</div>` : '';
+            const title = label || '🧠 Análise Facial';
+            return `<div class="attr-panel">
+                <button class="attr-toggle" onclick="toggleAttr('ab-${uid}')">
+                    <span>${title}</span><span id="arr-${uid}">▼</span>
+                </button>
+                <div class="attr-body" id="ab-${uid}" style="display:none">
+                    <div style="display:flex;gap:1rem;align-items:center;margin-bottom:.75rem;">
+                        <div style="font-size:2.8rem;line-height:1;">${emoji}</div>
+                        <div><div style="font-size:1rem;font-weight:700;">${emName}</div><div style="font-size:.8rem;color:#94a3b8;">Emoção dominante</div></div>
+                        <div style="margin-left:auto;text-align:right;">
+                            <div style="font-size:1rem;font-weight:700;">${ageStr}</div>
+                            <div style="font-size:.8rem;color:#94a3b8;">${gender}${genderConf}</div>${smile}
+                        </div>
+                    </div>
+                    <div style="font-size:.78rem;font-weight:600;color:#94a3b8;margin-bottom:4px;">EMOÇÕES</div>
+                    ${emBars}
+                    ${raceName ? `<div style="font-size:.78rem;font-weight:600;color:#94a3b8;margin:8px 0 4px;">ETNIA ESTIMADA · ${raceName}</div>${raceBars}` : ''}
+                </div>
+            </div>`;
+        }
+        function toggleAttr(id) {
+            const el = document.getElementById(id);
+            const arr = document.getElementById('arr-' + id.replace('ab-',''));
+            if (!el) return;
+            const open = el.style.display === 'none';
+            el.style.display = open ? 'block' : 'none';
+            if (arr) arr.textContent = open ? '▲' : '▼';
+        }
+    </script>
+</body>
+</html>
